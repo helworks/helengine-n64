@@ -57,18 +57,14 @@ execution remains unverified.
 
 The approved N64 scene build uses the existing authored source at
 `C:\dev\helprojs\demodisc\assets\scenes\rendering\cube_test.helen` and its
-original `city.rendering.CubeTestSpinComponent`. Regenerate that scene through
-the editor before running the normal N64 build:
+original `city.rendering.CubeTestSpinComponent`.
+
+Regenerate that scene through the editor before running the normal N64 build:
 
 ```powershell
 dotnet C:\dev\helworks\helengine\helengine.ui\helengine.editor.app\bin\Debug\net9.0-windows\helengine.editor.app.dll `
   --project C:\dev\helprojs\demodisc\project.heproj `
   --editor-command menu.generate-cube-test-scene
-
-dotnet C:\dev\helworks\helengine\helengine.ui\helengine.editor.app\bin\Debug\net9.0-windows\helengine.editor.app.dll `
-  --project C:\dev\helprojs\demodisc\project.heproj `
-  --build n64 --build-profile release `
-  --output C:\dev\helworks\builds\helengine-n64\cube-test\editor-output
 ```
 
 The demodisc N64 build entry selects `cube_test`, runs the existing generation
@@ -80,8 +76,24 @@ forward axis; the Tiny3D SRT call continues to receive the authored quaternion.
 See `C:\dev\helworks\builds\helengine-n64\cube-test\post-override-inventory.md`
 for the cooked inventory and focused override regression result.
 
-Register the local N64 catalog entry with the existing codegen tool before the
-normal build. The registration updates only `n64` and validates every path:
+The minimal N64 codegen profile leaves the enabled-feature option unset, which
+means no catalog feature is enabled by default. Its forced-disabled list uses
+only feature ids declared by the checked-in HelEngine catalog.
+
+After changing the N64 builder source, rebuild the registered builder assembly
+without rebuilding its already available HelEngine references:
+
+```powershell
+dotnet build C:\dev\helworks\helengine-n64-impl\builder\helengine.n64.builder.csproj `
+  --no-restore `
+  -p:HelengineRoot=C:\dev\helworks\helengine `
+  -p:BuildProjectReferences=false
+```
+
+Register the local catalog, set both required environment variables, and then
+run the normal project build. The registration updates only `n64` and validates
+every path; the environment variables keep the native checkout and isolated
+build graph under the visible cube-test output directory:
 
 ```powershell
 pwsh -NoProfile -File C:\dev\helworks\helengine-n64-impl\scripts\register-development-platform.ps1 `
@@ -91,19 +103,12 @@ pwsh -NoProfile -File C:\dev\helworks\helengine-n64-impl\scripts\register-develo
   -BuilderAssemblyPath C:\dev\helworks\helengine-n64-impl\builder\bin\Debug\net9.0\helengine.n64.builder.dll `
   -GeneratedCoreCppRoot C:\dev\helworks\builds\helengine-n64\cube-test\generated\core `
   -CodegenToolPath C:\dev\helworks\csharpcodegen\codegen\bin\Release\net9.0\codegen.exe
-```
 
-The native executor expects the repository root in the invoking shell:
-
-```powershell
 $env:HELENGINE_N64_REPOSITORY_ROOT = 'C:\dev\helworks\helengine-n64-impl'
 $env:HELENGINE_BUILD_WORKSPACE_ROOT = 'C:\dev\helworks\builds\helengine-n64\cube-test\work'
+
+dotnet C:\dev\helworks\helengine\helengine.ui\helengine.editor.app\bin\Debug\net9.0-windows\helengine.editor.app.dll `
+  --project C:\dev\helprojs\demodisc\project.heproj `
+  --build n64 --build-profile release `
+  --output C:\dev\helworks\builds\helengine-n64\cube-test\editor-output
 ```
-
-Set it before the editor build command so the generated N64 builder invokes the
-same checkout that owns the pinned toolchain and keeps the isolated build graph
-under the visible cube-test output directory.
-
-The minimal N64 codegen profile leaves the enabled-feature option unset, which
-means no catalog feature is enabled by default. Its forced-disabled list uses
-only feature ids declared by the checked-in HelEngine catalog.
