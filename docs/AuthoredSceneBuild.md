@@ -76,6 +76,13 @@ forward axis; the Tiny3D SRT call continues to receive the authored quaternion.
 See `C:\dev\helworks\builds\helengine-n64\cube-test\post-override-inventory.md`
 for the cooked inventory and focused override regression result.
 
+The current editor build configuration persists selected scenes as canonical
+`selectedSceneReferences`; the legacy `selectedSceneIds` JSON property is
+ignored by the normal queue loader. The demodisc `n64` entry therefore carries
+one file-backed reference for `scenes/rendering/cube_test.helen`. Verify the
+resolved queue contains only `cube_test` before a build so unrelated authored
+scenes do not enter the N64 cook.
+
 The minimal N64 codegen profile leaves the enabled-feature option unset, which
 means no catalog feature is enabled by default. Its forced-disabled list uses
 only feature ids declared by the checked-in HelEngine catalog.
