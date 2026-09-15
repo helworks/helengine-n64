@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <RunAnalyzers>false</RunAnalyzers>
+    <HelengineRoot Condition="'$(HelengineRoot)' == ''">$(MSBuildThisFileDirectory)..\..\..\helengine</HelengineRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(HelengineRoot)\engine\helengine.editor\helengine.editor.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\builder\helengine.n64.builder.csproj" />
+    <PackageReference Include="AssimpNetter" Version="6.0.2.1" />
+  </ItemGroup>
+</Project>

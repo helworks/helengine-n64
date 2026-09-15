@@ -24,21 +24,23 @@ extern "C" const char* he_get_runtime_startup_scene_id();
 namespace helengine::n64 {
 
 bool Nintendo64RuntimeHost::Initialize() {
-    debugf("n64:authored-runtime-start\\n");
+    debug_init_isviewer();
+    debug_init_usblog();
+    debugf("n64:authored-runtime-start\n");
     if (!Video.Initialize()) {
         return false;
     }
-    debugf("n64:video-ready\\n");
+    debugf("n64:video-ready\n");
     if (!Renderer.InitializeAuthored()) {
         return false;
     }
-    debugf("n64:renderer-ready\\n");
+    debugf("n64:renderer-ready\n");
     const int dragonFsResult = dfs_init(DFS_DEFAULT_LOCATION);
     if (dragonFsResult != DFS_ESUCCESS) {
-        debugf("n64:error dragonfs-initialization-failed code=%ld\\n", static_cast<long>(dragonFsResult));
+        debugf("n64:error dragonfs-initialization-failed code=%ld\n", static_cast<long>(dragonFsResult));
         return false;
     }
-    debugf("n64:dragonfs-ready\\n");
+    debugf("n64:dragonfs-ready\n");
 
     InitializationOptions = new ::CoreInitializationOptions();
     InitializationOptions->set_ContentStreamSource(new Nintendo64ContentStreamSource("rom:/"));
@@ -67,13 +69,13 @@ bool Nintendo64RuntimeHost::Initialize() {
 
     EngineCore = new ::Core(InitializationOptions);
     EngineCore->Initialize(Render3D, Render2D, Input, Platform, InitializationOptions);
-    debugf("n64:core-ready\\n");
+    debugf("n64:core-ready\n");
     const char* startupSceneId = he_get_runtime_startup_scene_id();
     if (startupSceneId == nullptr || startupSceneId[0] == '\0') {
         debugf("n64:error runtime-startup-scene-missing\n");
         return false;
     }
-    debugf("n64:startup-scene id=%s\\n", startupSceneId);
+    debugf("n64:startup-scene id=%s\n", startupSceneId);
     EngineCore->get_SceneManager()->LoadScene(startupSceneId, ::SceneLoadMode::Single);
     EngineCore->get_SceneManager()->CommitPendingOperationsAtFrameBoundary();
     ::ObjectManager* objectManager = EngineCore->get_ObjectManager();
@@ -83,9 +85,9 @@ bool Nintendo64RuntimeHost::Initialize() {
     const long drawableCount = objectManager == nullptr || objectManager->get_Drawables3D() == nullptr
         ? 0
         : static_cast<long>(objectManager->get_Drawables3D()->get_Count());
-    debugf("n64:scene-ready cameras=%ld drawables3d=%ld\\n", cameraCount, drawableCount);
+    debugf("n64:scene-ready cameras=%ld drawables3d=%ld\n", cameraCount, drawableCount);
     if (cameraCount != 1 || drawableCount != 1) {
-        debugf("n64:error authored-scene-cardinality\\n");
+        debugf("n64:error authored-scene-cardinality\n");
         return false;
     }
     return true;
@@ -136,7 +138,7 @@ int Nintendo64RuntimeHost::Run() {
             return 1;
         }
         if (!hasLoggedCompletedFrame) {
-            debugf("n64:first-frame-complete\\n");
+            debugf("n64:first-frame-complete\n");
             hasLoggedCompletedFrame = true;
         }
     }

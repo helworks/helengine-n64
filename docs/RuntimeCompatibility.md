@@ -40,11 +40,14 @@ The authored build uses the generic generated interfaces for:
 - `IContentStreamSource::OpenRead` and `AssetSerializer::Deserialize`
 - `ObjectManager` camera and drawable lists
 
-The N64 Makefile links the generator's `generated_unity.cpp` so template
-definitions such as `EngineBinaryReader::ReadArray` and
-`ContentManager::Load` are present with their generated call sites. The
-builder-owned `n64_runtime_scene_catalog.cpp` is linked as a separate source;
-its startup hooks use C linkage.
+The N64 Makefile links the generator's final `helengine_core_unity.cpp` so
+template definitions such as `EngineBinaryReader::ReadArray` and
+`ContentManager::Load` are present with their generated call sites. This final
+unit also includes the runtime component deserializers discovered from the
+cooked scenes. The earlier `generated_unity.cpp` is not a valid authored-build
+input because it can contain an empty component registration. The builder-owned
+`n64_runtime_scene_catalog.cpp` is linked as a separate source; its startup
+hooks use C linkage.
 
 ## Target constraints
 
@@ -52,6 +55,8 @@ its startup hooks use C linkage.
 - Explicit `NO_LIGHT`, depth compare/write, `AA_NONE`, and back-face culling
   for the default opaque material.
 - One perspective camera and one 3D drawable are required at runtime.
+- Authored camera and drawable entities use layer mask `1`; scene loading
+  preserves the serialized mask before camera queue filtering.
 - One triangle-list submesh is supported, with at most 64 packed vertices and
   128 triangles. Non-finite coordinates, out-of-range fixed-point positions,
   invalid indices, and excess geometry fail the load.

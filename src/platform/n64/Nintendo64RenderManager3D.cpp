@@ -34,6 +34,8 @@
 namespace helengine::n64 {
 namespace {
 
+constexpr const char kN64RendererFamilyId[] = "n64-unlit";
+
 ::Asset* Deserialize(::IContentStreamSource* source, const std::string& path) {
     if (source == nullptr) {
         throw new ArgumentNullException("contentStreamSource");
@@ -69,10 +71,10 @@ uint32_t Nintendo64RenderManager3D::PackColor(const ::PlatformMaterialAsset* mat
         throw new ArgumentNullException("materialAsset");
     }
     if (materialAsset->Lit || !materialAsset->TextureRelativePath.empty() ||
-        materialAsset->RendererFamilyId != "n64-unlit-v1") {
-        throw new InvalidOperationException("N64 authored scenes require opaque n64-unlit-v1 materials without textures.");
+        materialAsset->RendererFamilyId != kN64RendererFamilyId) {
+        throw new InvalidOperationException("N64 authored scenes require opaque n64-unlit materials without textures.");
     }
-    debugf("n64:material-loaded id=%s color=%08lX\\n", materialAsset->get_Id().c_str(), static_cast<unsigned long>(PackColor(materialAsset)));
+    debugf("n64:material-loaded id=%s color=%08lX\n", materialAsset->get_Id().c_str(), static_cast<unsigned long>(PackColor(materialAsset)));
     return new Nintendo64RuntimeMaterial(PackColor(materialAsset), materialAsset->DoubleSided);
 }
 
@@ -113,7 +115,7 @@ uint32_t Nintendo64RenderManager3D::PackColor(const ::PlatformMaterialAsset* mat
         delete runtimeModel;
         throw new InvalidOperationException("N64 cooked model exceeds the authored Tiny3D mesh limits.");
     }
-    debugf("n64:model-loaded id=%s vertices=%ld indices=%ld\\n", modelAsset->get_Id().c_str(), static_cast<long>(modelAsset->Positions->get_Length()), static_cast<long>(modelAsset->Indices16->get_Length()));
+    debugf("n64:model-loaded id=%s vertices=%ld indices=%ld\n", modelAsset->get_Id().c_str(), static_cast<long>(modelAsset->Positions->get_Length()), static_cast<long>(modelAsset->Indices16->get_Length()));
     return runtimeModel;
 }
 
@@ -187,7 +189,14 @@ void Nintendo64RenderManager3D::ReleaseModel(::RuntimeModel* model) {
 }
 
 void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
-    if (drawable == nullptr || drawable->get_Parent() == nullptr) {
+    if (drawable == nullptr) {
+        return;
+    }
+    if (drawable->get_Parent() == nullptr) {
+        return;
+    }
+    ::RuntimeModel* baseModel = drawable->get_Model();
+    if (baseModel == nullptr) {
         return;
     }
     Nintendo64RuntimeModel* model = he_cpp_try_cast<Nintendo64RuntimeModel>(drawable->get_Model());
@@ -220,7 +229,7 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
     if (!HasLoggedAuthoredDraw) {
         ::ModelAsset* rawModel = model->get_RawModelAsset();
         const char* modelId = rawModel == nullptr ? "<unknown>" : rawModel->get_Id().c_str();
-        debugf("n64:first-authored-draw model=%s material=n64-unlit calls=%ld\\n", modelId, static_cast<long>(DrawCallCount));
+        debugf("n64:first-authored-draw model=%s material=n64-unlit calls=%ld\n", modelId, static_cast<long>(DrawCallCount));
         HasLoggedAuthoredDraw = true;
     }
 }

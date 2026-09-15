@@ -39,6 +39,7 @@ endif
 ifeq ($(HELENGINE_N64_MODE),authored)
 N64_CXXFLAGS += -DHELENGINE_N64_AUTHORED=1
 ifneq ($(wildcard $(HELENGINE_N64_GENERATED_CORE_ROOT)/Core.hpp),)
+ifneq ($(wildcard $(HELENGINE_N64_GENERATED_CORE_ROOT)/helengine_core_unity.cpp),)
 N64_CXXFLAGS += -DHELENGINE_N64_HAS_GENERATED_CORE=1
 N64_CXXFLAGS += -std=gnu++20
 # Generated interface-owned collection entries can point at abstract runtime
@@ -49,12 +50,12 @@ N64_CXXFLAGS += -Wno-error=reorder
 N64_CXXFLAGS += -Wno-error=sign-compare
 N64_CXXFLAGS += -Wno-error=maybe-uninitialized
 N64_CXXFLAGS += -I$(HELENGINE_N64_GENERATED_CORE_ROOT)
-# The generated unity unit carries template definitions (for example
-# EngineBinaryReader::ReadArray and ContentManager::Load) that must be linked
-# with their generated call sites.  It is emitted by the generic generator;
-# the generator omits metadata-only attribute implementations that have no
-# native base class in a stripped runtime profile.
-N64_GENERATED_CORE_CPP := $(HELENGINE_N64_GENERATED_CORE_ROOT)/generated_unity.cpp $(HELENGINE_N64_GENERATED_CORE_ROOT)/n64_runtime_scene_catalog.cpp
+# The final generated unity unit carries template definitions (for example
+# EngineBinaryReader::ReadArray and ContentManager::Load) and the generated
+# runtime component deserializers discovered from cooked scenes.  The generic
+# generator emits it after cooked-scene discovery; generated_unity.cpp is the
+# earlier source tree unity and can have an empty component registration.
+N64_GENERATED_CORE_CPP := $(HELENGINE_N64_GENERATED_CORE_ROOT)/helengine_core_unity.cpp $(HELENGINE_N64_GENERATED_CORE_ROOT)/n64_runtime_scene_catalog.cpp
 N64_GENERATED_CORE_OBJECTS := $(patsubst $(HELENGINE_N64_GENERATED_CORE_ROOT)/%.cpp,$(BUILD_DIR)/generated-core/%.o,$(N64_GENERATED_CORE_CPP))
 OBJECTS += \
 	$(BUILD_DIR)/platform/n64/Nintendo64RuntimeHost.o \
@@ -66,6 +67,9 @@ OBJECTS += \
 	$(BUILD_DIR)/platform/n64/Nintendo64RenderManager2D.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64InputBackend.o
 OBJECTS += $(N64_GENERATED_CORE_OBJECTS)
+else
+$(error HELENGINE_N64_MODE=authored requires final generated helengine_core_unity.cpp; refusing stale generated_unity.cpp fallback)
+endif
 else
 $(error HELENGINE_N64_MODE=authored requires a generated Core.hpp tree; refusing diagnostic fallback)
 endif
