@@ -6,8 +6,8 @@ authored-scene path.
 ## Published contract
 
 - Platform: `n64`
-- Graphics profile: `n64-unlit`
-- Material schema: `n64-unlit-v1`
+- Graphics profile: `n64-standard`
+- Material schema: `n64-standard-v1`
 - Build profiles: `debug`, `release`
 - Serialization: generated C++ profile declares `LittleEndian`; cooked payloads
   are decoded through `AssetSerializer` and generated serializers on the target.

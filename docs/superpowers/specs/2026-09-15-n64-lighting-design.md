@@ -35,6 +35,10 @@ scene without one renders back faces black.
   and rejects point and spot lights, and rejects more than seven directional
   lights, because Tiny3D supports seven directional lights and one ambient
   color.
+- Enforcement note: the build manifest carries no component types, so point
+  and spot lights are rejected by editor packaging through the builder's
+  Unsupported support rules, and the seven-directional-light limit is checked
+  by the runtime host at scene load.
 
 ## Demodisc authoring
 

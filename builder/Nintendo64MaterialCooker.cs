@@ -4,34 +4,37 @@ using helengine.baseplatform.Results;
 
 namespace helengine.n64.builder;
 
-/// <summary>Cooks the single opaque, unlit N64 material schema.</summary>
+/// <summary>Cooks the single opaque N64 material schema with lit or unlit shading.</summary>
 public sealed class Nintendo64MaterialCooker {
     public PlatformMaterialCookResult Cook(PlatformMaterialCookRequest request) {
         if (request == null) throw new ArgumentNullException(nameof(request));
         if (!string.Equals(request.TargetPlatformId, "n64", StringComparison.OrdinalIgnoreCase)) {
             throw new InvalidOperationException($"N64 cannot cook materials for target platform '{request.TargetPlatformId}'.");
         }
-        if (!string.Equals(request.SchemaId, Nintendo64MaterialSchemaIds.UnlitSchemaId, StringComparison.OrdinalIgnoreCase)) {
+        if (!string.Equals(request.SchemaId, Nintendo64MaterialSchemaIds.StandardSchemaId, StringComparison.OrdinalIgnoreCase)) {
             throw new InvalidOperationException($"N64 does not support material schema '{request.SchemaId}'.");
         }
 
         string texture = Resolve(request.FieldValues, Nintendo64MaterialSchemaIds.TextureRelativePathFieldId);
-        if (!string.IsNullOrWhiteSpace(texture)) throw new InvalidOperationException("N64 n64-unlit-v1 does not support texture bindings.");
-        string lighting = Resolve(request.FieldValues, Nintendo64MaterialSchemaIds.LightingModeFieldId, "unlit");
-        if (!string.Equals(lighting, "unlit", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("N64 n64-unlit-v1 requires unlit lighting.");
+        if (!string.IsNullOrWhiteSpace(texture)) throw new InvalidOperationException("N64 n64-standard-v1 does not support texture bindings.");
+        string lighting = Resolve(request.FieldValues, Nintendo64MaterialSchemaIds.LightingModeFieldId, Nintendo64MaterialSchemaIds.LightingLitValue);
+        bool lit = string.Equals(lighting, Nintendo64MaterialSchemaIds.LightingLitValue, StringComparison.OrdinalIgnoreCase);
+        if (!lit && !string.Equals(lighting, Nintendo64MaterialSchemaIds.LightingUnlitValue, StringComparison.OrdinalIgnoreCase)) {
+            throw new InvalidOperationException($"N64 n64-standard-v1 lighting must be 'lit' or 'unlit'; received '{lighting}'.");
+        }
         string transparency = Resolve(request.FieldValues, Nintendo64MaterialSchemaIds.TransparencyFieldId, "opaque");
-        if (!string.Equals(transparency, "opaque", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("N64 n64-unlit-v1 requires opaque materials.");
+        if (!string.Equals(transparency, "opaque", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("N64 n64-standard-v1 requires opaque materials.");
 
         ParseColor(Resolve(request.FieldValues, Nintendo64MaterialSchemaIds.BaseColorFieldId, "#FFFFFFFF"), out byte r, out byte g, out byte b, out byte a);
-        if (a != 255) throw new InvalidOperationException("N64 n64-unlit-v1 requires an opaque base color (alpha FF).");
+        if (a != 255) throw new InvalidOperationException("N64 n64-standard-v1 requires an opaque base color (alpha FF).");
 
         helengine.PlatformMaterialAsset cooked = new() {
             Id = request.MaterialAssetId,
-            RendererFamilyId = string.IsNullOrWhiteSpace(request.SelectedGraphicsProfileId) ? "n64-unlit" : request.SelectedGraphicsProfileId,
+            RendererFamilyId = string.IsNullOrWhiteSpace(request.SelectedGraphicsProfileId) ? Nintendo64MaterialSchemaIds.StandardGraphicsProfileId : request.SelectedGraphicsProfileId,
             TextureRelativePath = string.Empty,
             DoubleSided = false,
             UseVertexColor = false,
-            Lit = false,
+            Lit = lit,
             BaseColorR = r,
             BaseColorG = g,
             BaseColorB = b,

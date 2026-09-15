@@ -12,15 +12,35 @@ public sealed class Nintendo64PlatformDefinitionTests {
         PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
 
         Assert.Equal("n64", definition.PlatformId);
-        Assert.Equal("n64-unlit", Assert.Single(definition.GraphicsProfiles).ProfileId);
-        Assert.Equal("n64-unlit-v1", Assert.Single(definition.MaterialSchemas).SchemaId);
+        Assert.Equal("n64-standard", Assert.Single(definition.GraphicsProfiles).ProfileId);
+        PlatformMaterialSchemaDefinition schema = Assert.Single(definition.MaterialSchemas);
+        Assert.Equal("n64-standard-v1", schema.SchemaId);
+        PlatformMaterialFieldDefinition lighting = Assert.Single(schema.Fields, field => field.FieldId == Nintendo64MaterialSchemaIds.LightingModeFieldId);
+        Assert.Equal("lit", lighting.DefaultValue);
+        Assert.Equal(new[] { "lit", "unlit" }, lighting.AllowedValues);
         Assert.Equal(new[] { "debug", "release" }, definition.BuildProfiles.Select(profile => profile.ProfileId));
+        Assert.All(definition.BuildProfiles, profile => Assert.Equal("n64-standard", profile.GraphicsProfileId));
         Assert.Empty(definition.AssetCookCapabilities);
         Assert.Contains(definition.CodegenProfiles.Single().Settings, setting =>
             setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures
             && setting.DefaultValue.Contains("shaders", StringComparison.OrdinalIgnoreCase)
             && setting.DefaultValue.Contains("render2d", StringComparison.OrdinalIgnoreCase)
             && setting.DefaultValue.Contains("text2d", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Create_SupportsDirectionalAndAmbientLightsAndRejectsPointAndSpot() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        PlatformComponentSupportRule directional = Assert.Single(definition.ComponentSupportRules, rule => rule.ComponentTypeId == "helengine.DirectionalLightComponent");
+        PlatformComponentSupportRule ambient = Assert.Single(definition.ComponentSupportRules, rule => rule.ComponentTypeId == "helengine.AmbientLightComponent");
+        PlatformComponentSupportRule point = Assert.Single(definition.ComponentSupportRules, rule => rule.ComponentTypeId == "helengine.PointLightComponent");
+        PlatformComponentSupportRule spot = Assert.Single(definition.ComponentSupportRules, rule => rule.ComponentTypeId == "helengine.SpotLightComponent");
+        Assert.Equal(PlatformComponentSupportKind.Transform, directional.SupportKind);
+        Assert.Equal(PlatformComponentSupportKind.Transform, ambient.SupportKind);
+        Assert.Equal(PlatformComponentSupportKind.Unsupported, point.SupportKind);
+        Assert.Equal(PlatformComponentSupportKind.Unsupported, spot.SupportKind);
+        Assert.DoesNotContain(definition.ComponentSupportRules, rule => rule.ComponentTypeId == "helengine.lightcomponent");
     }
 
     [Fact]
@@ -58,28 +78,46 @@ public sealed class Nintendo64PlatformDefinitionTests {
     }
 
     [Fact]
-    public void CookMaterial_EmitsOpaqueUnlitAuthoredColor() {
+    public void CookMaterial_EmitsLitOpaqueAuthoredColorByDefault() {
         Nintendo64PlatformAssetBuilder builder = new();
         PlatformMaterialCookResult result = builder.CookMaterial(new PlatformMaterialCookRequest(
             "mat-cube",
             "materials/cube",
             "n64",
             "debug",
-            "n64-unlit",
-            Nintendo64MaterialSchemaIds.UnlitSchemaId,
+            "n64-standard",
+            Nintendo64MaterialSchemaIds.StandardSchemaId,
             new Dictionary<string, string> {
                 [Nintendo64MaterialSchemaIds.BaseColorFieldId] = "#12A0FF"
             }));
 
         helengine.PlatformMaterialAsset cooked = Assert.IsType<helengine.PlatformMaterialAsset>(helengine.files.AssetSerializer.DeserializeFromBytes(result.CookedMaterialBytes));
-        Assert.Equal("n64-unlit", cooked.RendererFamilyId);
-        Assert.False(cooked.Lit);
+        Assert.Equal("n64-standard", cooked.RendererFamilyId);
+        Assert.True(cooked.Lit);
         Assert.False(cooked.UseVertexColor);
         Assert.True(string.IsNullOrEmpty(cooked.TextureRelativePath));
         Assert.Equal((byte)0x12, cooked.BaseColorR);
         Assert.Equal((byte)0xA0, cooked.BaseColorG);
         Assert.Equal((byte)0xFF, cooked.BaseColorB);
         Assert.Equal((byte)0xFF, cooked.BaseColorA);
+    }
+
+    [Fact]
+    public void CookMaterial_EmitsUnlitWhenRequested() {
+        Nintendo64PlatformAssetBuilder builder = new();
+        PlatformMaterialCookResult result = builder.CookMaterial(new PlatformMaterialCookRequest(
+            "mat-cube",
+            "materials/cube",
+            "n64",
+            "debug",
+            "n64-standard",
+            Nintendo64MaterialSchemaIds.StandardSchemaId,
+            new Dictionary<string, string> {
+                [Nintendo64MaterialSchemaIds.LightingModeFieldId] = "unlit"
+            }));
+
+        helengine.PlatformMaterialAsset cooked = Assert.IsType<helengine.PlatformMaterialAsset>(helengine.files.AssetSerializer.DeserializeFromBytes(result.CookedMaterialBytes));
+        Assert.False(cooked.Lit);
     }
 
     [Fact]
@@ -90,12 +128,12 @@ public sealed class Nintendo64PlatformDefinitionTests {
             "materials/cube",
             "n64",
             "debug",
-            "n64-unlit",
-            Nintendo64MaterialSchemaIds.UnlitSchemaId,
+            "n64-standard",
+            Nintendo64MaterialSchemaIds.StandardSchemaId,
             new Dictionary<string, string> { [key] = value });
 
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TextureRelativePathFieldId, "textures/cube.hetex")));
-        Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.LightingModeFieldId, "lit")));
+        Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.LightingModeFieldId, "pbr")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TransparencyFieldId, "alpha")));
     }
 
