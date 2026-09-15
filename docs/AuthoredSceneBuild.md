@@ -93,6 +93,10 @@ DragonFS staging reads manifest-declared `cooked/...` paths from that package
 source root; the sibling workspace `cooked` directory remains the editor's
 cook output and is not the builder input root.
 
+The registered native executor passes `-Clean` to the Docker build wrapper so
+dependency files from an earlier generated Core profile cannot affect the
+authored unity compilation.
+
 After changing the N64 builder source, rebuild the registered builder assembly
 without rebuilding its already available HelEngine references:
 

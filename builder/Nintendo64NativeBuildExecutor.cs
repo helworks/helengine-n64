@@ -23,6 +23,11 @@ public sealed class Nintendo64NativeBuildExecutor : INintendo64NativeBuildExecut
         info.ArgumentList.Add("-NoProfile");
         info.ArgumentList.Add("-File");
         info.ArgumentList.Add(Path.Combine(repositoryRoot, "scripts", "build.ps1"));
+        // The generated Core root and authored filesystem are build inputs, but
+        // Make's object/dependency files live in the shared N64 checkout. A
+        // clean native pass prevents a previous generated profile from leaving
+        // stale header dependencies in helengine_core_unity.o.
+        info.ArgumentList.Add("-Clean");
         info.ArgumentList.Add("-Mode");
         info.ArgumentList.Add("authored");
         info.ArgumentList.Add("-GeneratedCoreRoot");
