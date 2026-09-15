@@ -92,3 +92,12 @@ pwsh -NoProfile -File C:\dev\helworks\helengine-n64-impl\scripts\register-develo
   -GeneratedCoreCppRoot C:\dev\helworks\builds\helengine-n64\cube-test\generated\core `
   -CodegenToolPath C:\dev\helworks\csharpcodegen\codegen\bin\Release\net9.0\codegen.exe
 ```
+
+The native executor expects the repository root in the invoking shell:
+
+```powershell
+$env:HELENGINE_N64_REPOSITORY_ROOT = 'C:\dev\helworks\helengine-n64-impl'
+```
+
+Set it before the editor build command so the generated N64 builder invokes the
+same checkout that owns the pinned toolchain.
