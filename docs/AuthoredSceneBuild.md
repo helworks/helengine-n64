@@ -79,3 +79,16 @@ content. The N64 camera adapter uses the engine's canonical authored `-Z`
 forward axis; the Tiny3D SRT call continues to receive the authored quaternion.
 See `C:\dev\helworks\builds\helengine-n64\cube-test\post-override-inventory.md`
 for the cooked inventory and focused override regression result.
+
+Register the local N64 catalog entry with the existing codegen tool before the
+normal build. The registration updates only `n64` and validates every path:
+
+```powershell
+pwsh -NoProfile -File C:\dev\helworks\helengine-n64-impl\scripts\register-development-platform.ps1 `
+  -EngineUserSettingsRoot C:\dev\helworks\helengine\user_settings `
+  -EngineVersion 1.0.0+ec2d7ff8a5b2624bbc51784bd9eb0c9babed1843 `
+  -N64RepositoryRoot C:\dev\helworks\helengine-n64-impl `
+  -BuilderAssemblyPath C:\dev\helworks\helengine-n64-impl\builder\bin\Debug\net9.0\helengine.n64.builder.dll `
+  -GeneratedCoreCppRoot C:\dev\helworks\builds\helengine-n64\cube-test\generated\core `
+  -CodegenToolPath C:\dev\helworks\csharpcodegen\codegen\bin\Release\net9.0\codegen.exe
+```
