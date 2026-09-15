@@ -22,7 +22,6 @@ public static class Nintendo64PlatformDefinitionFactory {
             PlatformSerializationEndianness.LittleEndian,
             [
                 new(PlatformCodegenSettingIds.ForcedDisabledFeatures, "Forced Disabled Features", PlatformSettingKind.Text, ForcedDisabledFeatures, true, []),
-                new(PlatformCodegenSettingIds.EnabledFeatures, "Enabled Features", PlatformSettingKind.Text, string.Empty, true, []),
                 new("generated-math-convention", "Generated Math Convention", PlatformSettingKind.Text, "native-column-vector", true, []),
                 new("pointer-size-bytes", "Pointer Size (Bytes)", PlatformSettingKind.Text, "4", true, []),
                 new("type-remaps", "Type Remaps", PlatformSettingKind.Text, "System.Numerics.Vector2=helengine.float2;System.Numerics.Vector3=helengine.float3;System.Numerics.Vector4=helengine.float4;System.Numerics.Quaternion=helengine.float4", true, []),

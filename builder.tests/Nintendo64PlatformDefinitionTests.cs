@@ -24,14 +24,12 @@ public sealed class Nintendo64PlatformDefinitionTests {
     }
 
     [Fact]
-    public void Create_LeavesEnabledFeaturesEmptyForMinimalN64Profile() {
+    public void Create_DoesNotOptIntoCodegenFeaturesForMinimalN64Profile() {
         PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
 
-        PlatformSettingDefinition enabledFeatures = Assert.Single(
+        Assert.DoesNotContain(
             definition.CodegenProfiles.Single().Settings,
             setting => setting.SettingId == PlatformCodegenSettingIds.EnabledFeatures);
-
-        Assert.Equal(string.Empty, enabledFeatures.DefaultValue);
     }
 
     [Fact]
@@ -107,7 +105,7 @@ public sealed class Nintendo64PlatformDefinitionTests {
             return Path.Combine(configuredRoot, "engine", "helengine.editor", "codegen", "features", "helengine-feature-catalog.json");
         }
 
-        DirectoryInfo? currentDirectory = new(AppContext.BaseDirectory);
+        DirectoryInfo currentDirectory = new(AppContext.BaseDirectory);
         for (int depth = 0; depth < 10 && currentDirectory != null; depth++) {
             string siblingCandidate = Path.Combine(
                 currentDirectory.FullName,
