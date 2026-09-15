@@ -38,4 +38,21 @@ public sealed class Nintendo64ContentStagerTests {
 
         Assert.Throws<InvalidOperationException>(() => new Nintendo64ContentStager().Stage([first, second], sourceRoot, stagingRoot, CancellationToken.None));
     }
+
+    [Fact]
+    public void Stage_RemovesFilesFromPreviousManifest() {
+        string root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-n64\\v02\\tests", Guid.NewGuid().ToString("N"));
+        string sourceRoot = Path.Combine(root, "source");
+        string stagingRoot = Path.Combine(root, "staged");
+        Directory.CreateDirectory(sourceRoot);
+        Directory.CreateDirectory(stagingRoot);
+        File.WriteAllText(Path.Combine(sourceRoot, "new.heasset"), "new");
+        File.WriteAllText(Path.Combine(stagingRoot, "deleted.heasset"), "old");
+        PlatformBuildArtifact artifact = new("new.heasset", "new", "sha", "scene", "n64");
+
+        new Nintendo64ContentStager().Stage([artifact], sourceRoot, stagingRoot, CancellationToken.None);
+
+        Assert.True(File.Exists(Path.Combine(stagingRoot, "new.heasset")));
+        Assert.False(File.Exists(Path.Combine(stagingRoot, "deleted.heasset")));
+    }
 }

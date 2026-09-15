@@ -27,10 +27,16 @@ public sealed class Nintendo64NativeBuildExecutor : INintendo64NativeBuildExecut
         info.ArgumentList.Add("authored");
         info.ArgumentList.Add("-GeneratedCoreRoot");
         info.ArgumentList.Add(generatedCoreCppRootPath);
+        info.ArgumentList.Add("-FilesystemRoot");
+        info.ArgumentList.Add(stagedFilesystemRootPath);
         using Process process = Process.Start(info) ?? throw new InvalidOperationException("Could not start the N64 build wrapper.");
+        Task<string> standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        Task<string> standardError = process.StandardError.ReadToEndAsync(cancellationToken);
         process.WaitForExit();
         cancellationToken.ThrowIfCancellationRequested();
-        if (process.ExitCode != 0) throw new InvalidOperationException($"N64 native build failed (exit {process.ExitCode}).{Environment.NewLine}{process.StandardOutput.ReadToEnd()}{Environment.NewLine}{process.StandardError.ReadToEnd()}");
+        string output = standardOutput.GetAwaiter().GetResult();
+        string error = standardError.GetAwaiter().GetResult();
+        if (process.ExitCode != 0) throw new InvalidOperationException($"N64 native build failed (exit {process.ExitCode}).{Environment.NewLine}{output}{Environment.NewLine}{error}");
         string romPath = Path.Combine(repositoryRoot, "helengine_n64.z64");
         if (!File.Exists(romPath)) throw new FileNotFoundException("N64 native build completed without producing a ROM.", romPath);
         File.Copy(romPath, Path.Combine(outputRootPath, "helengine_n64.z64"), true);

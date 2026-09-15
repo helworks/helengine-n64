@@ -44,8 +44,13 @@ public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
         if (diagnosticReporter == null) throw new ArgumentNullException(nameof(diagnosticReporter));
         List<PlatformBuildDiagnostic> diagnostics = [];
         string stagingRoot = Path.Combine(request.WorkingRoot, "n64-dragonfs");
+        string outputRomPath = Path.Combine(request.OutputRoot, "helengine_n64.z64");
         try {
             cancellationToken.ThrowIfCancellationRequested();
+            Directory.CreateDirectory(request.OutputRoot);
+            // Prevent a failed native invocation from being mistaken for a
+            // successful build because an older ROM is still in the output tree.
+            if (File.Exists(outputRomPath)) File.Delete(outputRomPath);
             if (!string.Equals(request.Manifest.PlatformName, "n64", StringComparison.OrdinalIgnoreCase)) {
                 throw new InvalidOperationException($"N64 builder received manifest for platform '{request.Manifest.PlatformName}'.");
             }
@@ -70,7 +75,7 @@ public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
             diagnosticReporter.Report(diagnostic);
         }
 
-        bool succeeded = diagnostics.Count == 0 && File.Exists(Path.Combine(request.OutputRoot, "helengine_n64.z64"));
+        bool succeeded = diagnostics.Count == 0 && File.Exists(outputRomPath);
         return new PlatformBuildReport(
             succeeded,
             [.. diagnostics],

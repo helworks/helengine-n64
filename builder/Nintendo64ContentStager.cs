@@ -14,6 +14,10 @@ public sealed class Nintendo64ContentStager {
         if (string.IsNullOrWhiteSpace(stagingRootPath)) throw new ArgumentException("Staging root is required.", nameof(stagingRootPath));
         string sourceRoot = Path.GetFullPath(sourceRootPath);
         string stagingRoot = Path.GetFullPath(stagingRootPath);
+        if (string.Equals(sourceRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), stagingRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)) {
+            throw new InvalidOperationException("N64 source and staging roots must be different directories.");
+        }
+        if (Directory.Exists(stagingRoot)) Directory.Delete(stagingRoot, true);
         Directory.CreateDirectory(stagingRoot);
         HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);
         List<string> stagedPaths = new(artifacts.Count);

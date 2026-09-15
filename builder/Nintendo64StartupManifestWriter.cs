@@ -19,8 +19,8 @@ public sealed class Nintendo64StartupManifestWriter {
         builder.AppendLine("#pragma once");
         builder.AppendLine("#include <cstddef>");
         builder.AppendLine("struct HERuntimeSceneCatalogEntry { const char* SceneId; const char* CookedRelativePath; };");
-        builder.AppendLine("const char* he_get_runtime_startup_scene_id();");
-        builder.AppendLine("const HERuntimeSceneCatalogEntry* he_runtime_scene_catalog_entries(std::size_t* count);");
+        builder.AppendLine("extern \"C\" const char* he_get_runtime_startup_scene_id();");
+        builder.AppendLine("extern \"C\" const HERuntimeSceneCatalogEntry* he_runtime_scene_catalog_entries(std::size_t* count);");
         string headerPath = Path.Combine(root, "n64_runtime_scene_catalog.hpp");
         File.WriteAllText(headerPath, builder.ToString(), new UTF8Encoding(false));
         StringBuilder source = new();
@@ -35,8 +35,8 @@ public sealed class Nintendo64StartupManifestWriter {
         source.AppendLine("};");
         source.Append("const char kStartupSceneId[] = \"").Append(Escape(startupSceneId)).AppendLine("\";");
         source.AppendLine("}");
-        source.AppendLine("const char* he_get_runtime_startup_scene_id() { return kStartupSceneId; }");
-        source.AppendLine("const HERuntimeSceneCatalogEntry* he_runtime_scene_catalog_entries(std::size_t* count) { if (count != nullptr) *count = sizeof(kEntries) / sizeof(kEntries[0]); return kEntries; }");
+        source.AppendLine("extern \"C\" const char* he_get_runtime_startup_scene_id() { return kStartupSceneId; }");
+        source.AppendLine("extern \"C\" const HERuntimeSceneCatalogEntry* he_runtime_scene_catalog_entries(std::size_t* count) { if (count != nullptr) *count = sizeof(kEntries) / sizeof(kEntries[0]); return kEntries; }");
         string sourcePath = Path.Combine(root, "n64_runtime_scene_catalog.cpp");
         File.WriteAllText(sourcePath, source.ToString(), new UTF8Encoding(false));
         return headerPath;
@@ -44,7 +44,20 @@ public sealed class Nintendo64StartupManifestWriter {
 
     public string Write(string generatedCoreCppRootPath, PlatformBuildManifest manifest) {
         if (manifest == null) throw new ArgumentNullException(nameof(manifest));
-        return Write(generatedCoreCppRootPath, manifest.StartupSceneId, manifest.Scenes.Select(scene => new Nintendo64StartupManifestEntry(scene.SceneId, scene.SourceIdentity)).ToArray());
+        PlatformBuildArtifact[] sceneArtifacts = manifest.CookedArtifacts
+            .Where(artifact => string.Equals(artifact.ArtifactKind, "scene", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        Nintendo64StartupManifestEntry[] entries = manifest.Scenes.Select(scene => {
+            PlatformBuildArtifact artifact = sceneArtifacts.FirstOrDefault(candidate => string.Equals(candidate.LogicalArtifactId, scene.SceneId, StringComparison.Ordinal))!;
+            if (artifact == null) {
+                string normalizedSourceIdentity = Nintendo64ContentStager.NormalizeRelativePath(scene.SourceIdentity);
+                artifact = sceneArtifacts.FirstOrDefault(candidate => string.Equals(Nintendo64ContentStager.NormalizeRelativePath(candidate.RelativePath), normalizedSourceIdentity, StringComparison.Ordinal));
+            }
+            if (artifact == null && sceneArtifacts.Length == 1) artifact = sceneArtifacts[0];
+            if (artifact == null) throw new InvalidOperationException($"N64 startup scene '{scene.SceneId}' has no cooked scene artifact in the manifest.");
+            return new Nintendo64StartupManifestEntry(scene.SceneId, artifact.RelativePath);
+        }).ToArray();
+        return Write(generatedCoreCppRootPath, manifest.StartupSceneId, entries);
     }
 
     static string Escape(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal).Replace("\r", "\\r", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal);

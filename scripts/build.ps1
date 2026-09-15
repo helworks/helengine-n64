@@ -4,7 +4,8 @@ param(
     [switch]$Debug,
     [ValidateSet('diagnostic', 'authored')]
     [string]$Mode = 'diagnostic',
-    [string]$GeneratedCoreRoot = 'generated/core'
+    [string]$GeneratedCoreRoot = 'generated/core',
+    [string]$FilesystemRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,12 +24,31 @@ if (-not (Test-Path -LiteralPath (Join-Path $root '.deps\libdragon'))) {
 if ($LASTEXITCODE -ne 0) { throw 'N64 build image creation failed.' }
 
 $mount = "${root}:/workspace"
-$makePrefix = @('run', '--rm', '-v', $mount, '-w', '/workspace', $image, 'make')
+$makePrefix = @('run', '--rm', '-v', $mount)
+$filesystemArgument = 'filesystem'
+$generatedCoreArgument = $GeneratedCoreRoot
+if ([System.IO.Path]::IsPathRooted($GeneratedCoreRoot)) {
+    $resolvedGeneratedCoreRoot = (Resolve-Path -LiteralPath $GeneratedCoreRoot).Path
+    if (-not (Test-Path -LiteralPath $resolvedGeneratedCoreRoot -PathType Container)) {
+        throw "Generated Core root must be an existing directory: $GeneratedCoreRoot"
+    }
+    $makePrefix += @('-v', "${resolvedGeneratedCoreRoot}:/n64-generated-core")
+    $generatedCoreArgument = '/n64-generated-core'
+}
+if (-not [string]::IsNullOrWhiteSpace($FilesystemRoot)) {
+    $resolvedFilesystemRoot = (Resolve-Path -LiteralPath $FilesystemRoot).Path
+    if (-not (Test-Path -LiteralPath $resolvedFilesystemRoot -PathType Container)) {
+        throw "Filesystem root must be an existing directory: $FilesystemRoot"
+    }
+    $makePrefix += @('-v', "${resolvedFilesystemRoot}:/n64-staged-filesystem")
+    $filesystemArgument = '/n64-staged-filesystem'
+}
+$makePrefix += @('-w', '/workspace', $image, 'make')
 if ($Clean) {
     & docker @($makePrefix + @('clean'))
     if ($LASTEXITCODE -ne 0) { throw 'N64 clean failed.' }
 }
-$makeArgs = @($makePrefix, "HELENGINE_N64_MODE=$Mode", "HELENGINE_N64_GENERATED_CORE_ROOT=$GeneratedCoreRoot")
+$makeArgs = @($makePrefix, "HELENGINE_N64_MODE=$Mode", "HELENGINE_N64_GENERATED_CORE_ROOT=$generatedCoreArgument", "HELENGINE_N64_FILESYSTEM_ROOT=$filesystemArgument")
 if ($Debug) { $makeArgs += 'D=1' }
 & docker @makeArgs
 if ($LASTEXITCODE -ne 0) { throw 'N64 ROM build failed.' }

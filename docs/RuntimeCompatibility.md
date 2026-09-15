@@ -1,18 +1,7 @@
 # N64 generated runtime compatibility
 
-This document records the generated Core checkpoint for the N64 platform.
-
-## Task 1 status
-
-The platform metadata and restricted material schema are implemented in the N64
-builder project. The builder currently rejects `BuildAsync` with
-`N64BUILD_NOT_IMPLEMENTED` until generated Core sources and the DragonFS native
-packager are available. No generated C++ source is checked in or rewritten.
-
-The current native host remains the standalone diagnostic cube. Its baseline
-source revision is `415035a8d18b9320435203ddbd6292c5f3ab3356` on branch
-`n64-v01`. A fresh baseline ROM hash must be recorded from the pinned Docker
-image before the authored mode is enabled.
+This document records the generated Core and native ABI checkpoint for the N64
+authored-scene path.
 
 ## Published contract
 
@@ -20,19 +9,56 @@ image before the authored mode is enabled.
 - Graphics profile: `n64-unlit`
 - Material schema: `n64-unlit-v1`
 - Build profiles: `debug`, `release`
-- Serialization: generated profile declares `LittleEndian`; cooked payloads
-  must be decoded through generated serializers on the target rather than
-  copied into native structs.
-- Runtime material resolution: cooked platform-owned payloads.
-- Runtime storage: loose files staged into DragonFS and exposed as
+- Serialization: generated C++ profile declares `LittleEndian`; cooked payloads
+  are decoded through `AssetSerializer` and generated serializers on the target.
+- Runtime material/model resolution: cooked platform-owned payloads.
+- Runtime storage: manifest-declared files staged into DragonFS and exposed as
   content-relative `rom:/` paths.
 - Unsupported features: textures, lighting, transparency, audio, physics,
   input, UI, animation, and lights are rejected by metadata or cooking.
 
 ## Generated ABI record
 
-No generated Core source has been emitted for this checkout yet. Once the
-normal editor build graph generates C++, append the exact Core initialization,
-`RenderManager3D`, content-stream, scene-manager, and model/material override
-declarations here, together with the generator command, profile settings, and
-file manifest. Do not infer declarations from this plan.
+The generated Core is produced from `engine/helengine.core/helengine.core.csproj`
+with the pinned C++ generator and the N64 profile:
+
+```text
+--platform n64 --language cpp --endianness little
+--preset native-core-boot
+--set generated-math-convention=native-column-vector
+--set pointer-size-bytes=4
+--set native-file-system-header="platform/n64/Nintendo64ContentStreamSource.hpp"
+--set native-file-system-type=helengine::n64::Nintendo64ContentStreamSource
+```
+
+The authored build uses the generic generated interfaces for:
+
+- `Core::Initialize`, `Core::Update`, and `Core::Draw`
+- `SceneManager::LoadScene` and frame-boundary commit
+- `RenderManager3D::BuildModelFromCooked`,
+  `BuildMaterialFromCooked`, `Draw`, and release hooks
+- `IContentStreamSource::OpenRead` and `AssetSerializer::Deserialize`
+- `ObjectManager` camera and drawable lists
+
+The N64 Makefile links the generator's `generated_unity.cpp` so template
+definitions such as `EngineBinaryReader::ReadArray` and
+`ContentManager::Load` are present with their generated call sites. The
+builder-owned `n64_runtime_scene_catalog.cpp` is linked as a separate source;
+its startup hooks use C linkage.
+
+## Target constraints
+
+- 320x240, 16-bit color, double buffering, and a 16-bit depth surface.
+- Explicit `NO_LIGHT`, depth compare/write, `AA_NONE`, and back-face culling
+  for the default opaque material.
+- One perspective camera and one 3D drawable are required at runtime.
+- One triangle-list submesh is supported, with at most 64 packed vertices and
+  128 triangles. Non-finite coordinates, out-of-range fixed-point positions,
+  invalid indices, and excess geometry fail the load.
+- DragonFS is initialized with `DFS_DEFAULT_LOCATION`; the content bridge
+  reads and closes each file before returning a memory-backed stream.
+
+The authored cross-build links successfully with the pinned
+`helengine-n64-toolchain` image. The resulting authored ELF is below the base
+4 MiB RDRAM target's static image size, but target execution and heap headroom
+remain unverified without an emulator or hardware capture.

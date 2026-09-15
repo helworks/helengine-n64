@@ -37,6 +37,25 @@ bool Nintendo64Renderer::Initialize() {
     return true;
 }
 
+bool Nintendo64Renderer::InitializeAuthored() {
+    if (Initialized) {
+        return Authored;
+    }
+
+    T3DInitParams params{};
+    t3d_init(params);
+    ModelMatrix = static_cast<T3DMat4FP*>(malloc_uncached(sizeof(T3DMat4FP)));
+    if (ModelMatrix == nullptr) {
+        debugf("n64:error authored-model-matrix-allocation-failed\n");
+        t3d_destroy();
+        return false;
+    }
+    Viewport = t3d_viewport_create();
+    Authored = true;
+    Initialized = true;
+    return true;
+}
+
 void Nintendo64Renderer::BeginScene() {
     if (!Initialized) {
         return;
@@ -47,7 +66,7 @@ void Nintendo64Renderer::BeginScene() {
 }
 
 void Nintendo64Renderer::Prepare(float angleX, float angleY) {
-    if (!Initialized || ModelMatrix == nullptr) {
+    if (!Initialized || Authored || ModelMatrix == nullptr) {
         return;
     }
 
@@ -60,6 +79,38 @@ void Nintendo64Renderer::Prepare(float angleX, float angleY) {
     t3d_mat4_rotate(&rotationY, &axisY, angleY);
     t3d_mat4_mul(&model, &rotationY, &rotationX);
     t3d_mat4_to_fixed(ModelMatrix, &model);
+}
+
+void Nintendo64Renderer::SetAuthoredCamera(const T3DMat4& viewMatrix, float fieldOfViewRadians, float aspectRatio, float nearPlane, float farPlane) {
+    if (!Initialized || !Authored) {
+        return;
+    }
+    t3d_viewport_set_perspective(&Viewport, fieldOfViewRadians, aspectRatio, nearPlane, farPlane);
+    t3d_viewport_set_view_matrix(&Viewport, &viewMatrix);
+}
+
+void Nintendo64Renderer::DrawAuthoredMesh(const T3DVertPacked* vertices, uint32_t vertexCount, const uint16_t* indices, uint32_t indexCount, const T3DMat4& modelMatrix, uint32_t color, bool doubleSided) {
+    if (!Initialized || !Authored || vertices == nullptr || indices == nullptr || vertexCount == 0 || indexCount == 0 || ModelMatrix == nullptr) {
+        return;
+    }
+
+    rdpq_mode_combiner(RDPQ_COMBINER_SHADE);
+    rdpq_mode_antialias(AA_NONE);
+    rdpq_mode_zbuf(true, true);
+    rdpq_mode_blender(0);
+    rdpq_mode_fog(0);
+    t3d_light_set_count(0);
+    t3d_state_set_drawflags(static_cast<T3DDrawFlags>(T3D_FLAG_SHADED | T3D_FLAG_DEPTH | T3D_FLAG_NO_LIGHT | (doubleSided ? 0 : T3D_FLAG_CULL_BACK)));
+
+    t3d_mat4_to_fixed(ModelMatrix, &modelMatrix);
+    t3d_matrix_push(ModelMatrix);
+    t3d_vert_load(vertices, 0, vertexCount);
+    for (uint32_t index = 0; index + 2 < indexCount; index += 3) {
+        t3d_tri_draw(indices[index], indices[index + 1], indices[index + 2]);
+    }
+    t3d_matrix_pop(1);
+    t3d_tri_sync();
+    (void)color;
 }
 
 void Nintendo64Renderer::DrawCube() {
@@ -100,6 +151,7 @@ void Nintendo64Renderer::Shutdown() {
     }
     t3d_destroy();
     Initialized = false;
+    Authored = false;
 }
 
 } // namespace helengine::n64
