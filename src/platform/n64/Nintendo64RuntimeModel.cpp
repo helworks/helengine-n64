@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include <libdragon.h>
+#include <t3d/t3d.h>
 
 #include "ModelAsset.hpp"
 #include "RuntimeSubmesh.hpp"
@@ -17,7 +18,8 @@ constexpr float kPositionScale = 64.0f;
 constexpr int32_t kMaxVertices = 64;
 constexpr int32_t kMaxIndices = 384; // 128 triangle-list triangles.
 
-void SetPackedVertex(T3DVertPacked& packed, uint32_t logicalIndex, const float3& position) {
+/// Writes one logical vertex into its interleaved Tiny3D slot with a packed normal, or a zero normal when none is supplied.
+void SetPackedVertex(T3DVertPacked& packed, uint32_t logicalIndex, const float3& position, const float3* normal) {
     const bool second = (logicalIndex & 1u) != 0;
     int16_t* outputPosition = second ? packed.posB : packed.posA;
     uint16_t* outputNormal = second ? &packed.normB : &packed.normA;
@@ -27,17 +29,28 @@ void SetPackedVertex(T3DVertPacked& packed, uint32_t logicalIndex, const float3&
     outputPosition[0] = static_cast<int16_t>(std::lround(position.X * kPositionScale));
     outputPosition[1] = static_cast<int16_t>(std::lround(position.Y * kPositionScale));
     outputPosition[2] = static_cast<int16_t>(std::lround(position.Z * kPositionScale));
-    *outputNormal = 0;
+    if (normal == nullptr) {
+        *outputNormal = 0;
+    } else {
+        const T3DVec3 packedNormal = {{normal->X, normal->Y, normal->Z}};
+        *outputNormal = t3d_vert_pack_normal(&packedNormal);
+    }
     *outputColor = 0xFFFFFFFFu;
     outputUv[0] = 0;
     outputUv[1] = 0;
 }
 
+/// True when the position is finite and fits the fixed-point vertex range once scaled.
 bool IsFinitePosition(const float3& position) {
     return std::isfinite(position.X) && std::isfinite(position.Y) && std::isfinite(position.Z) &&
         std::fabs(position.X * kPositionScale) <= 32767.0f &&
         std::fabs(position.Y * kPositionScale) <= 32767.0f &&
         std::fabs(position.Z * kPositionScale) <= 32767.0f;
+}
+
+/// True when every component of a cooked normal is finite; packing has no fixed-point range to respect.
+bool IsFiniteNormal(const float3& normal) {
+    return std::isfinite(normal.X) && std::isfinite(normal.Y) && std::isfinite(normal.Z);
 }
 
 } // namespace
@@ -68,6 +81,17 @@ bool Nintendo64RuntimeModel::Initialize(const ::ModelAsset* asset) {
             return false;
         }
     }
+    const bool hasNormals = asset->Normals != nullptr && asset->Normals->get_Length() == vertexCount;
+    if (asset->Normals != nullptr && asset->Normals->get_Length() != 0 && !hasNormals) {
+        return false; // a partial normal array is a cooker defect, not something to guess around
+    }
+    if (hasNormals) {
+        for (int32_t vertex = 0; vertex < vertexCount; vertex++) {
+            if (!IsFiniteNormal((*asset->Normals)[vertex])) {
+                return false;
+            }
+        }
+    }
 
     VerticesValue = static_cast<T3DVertPacked*>(
         malloc_uncached(sizeof(T3DVertPacked) * static_cast<size_t>((vertexCount + 1) / 2)));
@@ -82,8 +106,10 @@ bool Nintendo64RuntimeModel::Initialize(const ::ModelAsset* asset) {
         VerticesValue[index] = {};
     }
     for (int32_t vertex = 0; vertex < vertexCount; vertex++) {
-        SetPackedVertex(VerticesValue[vertex / 2], static_cast<uint32_t>(vertex), (*asset->Positions)[vertex]);
+        SetPackedVertex(VerticesValue[vertex / 2], static_cast<uint32_t>(vertex), (*asset->Positions)[vertex],
+            hasNormals ? &(*asset->Normals)[vertex] : nullptr);
     }
+    HasNormalsValue = hasNormals;
     for (int32_t index = 0; index < indexCount; index++) {
         IndicesValue[index] = (*asset->Indices16)[index];
     }
@@ -114,6 +140,7 @@ void Nintendo64RuntimeModel::Dispose() {
     }
     VertexCountValue = 0;
     IndexCountValue = 0;
+    HasNormalsValue = false;
     ::RuntimeModel::Dispose();
 }
 

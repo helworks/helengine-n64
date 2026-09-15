@@ -23,6 +23,8 @@ public:
     const uint16_t* Indices() const { return IndicesValue; }
     uint32_t VertexCount() const { return VertexCountValue; }
     uint32_t IndexCount() const { return IndexCountValue; }
+    /// True when every cooked vertex received a packed normal.
+    bool HasNormals() const { return HasNormalsValue; }
     void SetColor(uint32_t color);
 
 private:
@@ -30,6 +32,8 @@ private:
     uint16_t* IndicesValue = nullptr;
     uint32_t VertexCountValue = 0;
     uint32_t IndexCountValue = 0;
+    /// True once the cooked asset supplied one normal per vertex and all of them were packed.
+    bool HasNormalsValue = false;
 };
 
 } // namespace helengine::n64

@@ -34,7 +34,7 @@
 namespace helengine::n64 {
 namespace {
 
-constexpr const char kN64RendererFamilyId[] = "n64-unlit";
+constexpr const char kN64RendererFamilyId[] = "n64-standard";
 
 ::Asset* Deserialize(::IContentStreamSource* source, const std::string& path) {
     if (source == nullptr) {
@@ -70,12 +70,11 @@ uint32_t Nintendo64RenderManager3D::PackColor(const ::PlatformMaterialAsset* mat
     if (materialAsset == nullptr) {
         throw new ArgumentNullException("materialAsset");
     }
-    if (materialAsset->Lit || !materialAsset->TextureRelativePath.empty() ||
-        materialAsset->RendererFamilyId != kN64RendererFamilyId) {
-        throw new InvalidOperationException("N64 authored scenes require opaque n64-unlit materials without textures.");
+    if (!materialAsset->TextureRelativePath.empty() || materialAsset->RendererFamilyId != kN64RendererFamilyId) {
+        throw new InvalidOperationException("N64 authored scenes require opaque n64-standard materials without textures.");
     }
-    debugf("n64:material-loaded id=%s color=%08lX\n", materialAsset->get_Id().c_str(), static_cast<unsigned long>(PackColor(materialAsset)));
-    return new Nintendo64RuntimeMaterial(PackColor(materialAsset), materialAsset->DoubleSided);
+    debugf("n64:material-loaded id=%s color=%08lX lit=%d\n", materialAsset->get_Id().c_str(), static_cast<unsigned long>(PackColor(materialAsset)), materialAsset->Lit ? 1 : 0);
+    return new Nintendo64RuntimeMaterial(PackColor(materialAsset), materialAsset->DoubleSided, materialAsset->Lit);
 }
 
 ::RuntimeMaterial* Nintendo64RenderManager3D::BuildMaterialFromCooked(::PlatformMaterialAsset* materialAsset) {
