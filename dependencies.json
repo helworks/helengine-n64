@@ -1,0 +1,18 @@
+﻿{
+    "libdragon":  {
+                      "repository":  "https://github.com/DragonMinded/libdragon.git",
+                      "revision":  "39d0d6096130836a65710da6730290701d060272",
+                      "branch":  "preview"
+                  },
+    "tiny3d":  {
+                   "repository":  "https://github.com/HailToDodongo/tiny3d.git",
+                   "revision":  "73d822f3af7c85cc1b93eaa4546504ba0a4ea156",
+                   "branch":  "main"
+               },
+    "toolchain":  {
+                      "baseImage":  "ubuntu@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7",
+                      "toolchainImage":  "sha256:efce4e8f134899c8f199c91c9eee2d26ae3bb562fc5d9702b9f8b12734981a7b",
+                      "buildImage":  null,
+                      "compilerVersion":  "mips64-elf-g++ (GCC) 16.2.0"
+                  }
+}
