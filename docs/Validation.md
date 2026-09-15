@@ -91,3 +91,61 @@ unverified.
 - The focused preserving-override editor test passes 1/1.
 - Standard package evidence is retained at
   `C:\dev\helworks\builds\helengine-n64\cube-test\probe-package-final`.
+
+## cube_test ROM with generated Core (2026-09-15)
+
+The existing demodisc `scenes/rendering/cube_test.helen` scene was built
+through the normal editor pipeline with the regenerated shared codegen
+executable (csharpcodegen commits `987b6b9`, `09b1f5b`, `6ea2819`: Math.Asin
+and Math.Sign runtime surface, one- and two-argument character `Split`
+overloads, and enum member names for omitted optional arguments). The final
+build workspace is
+`C:\dev\helworks\builds\helengine-n64\cube-test\work\n64\af84edd75b6b40dcbb726d5061a89c10`
+(`generated-core` and `builder\n64-dragonfs`). The editor build log is
+`normal-build-math-split-fixed.log` and the clean native build log is
+`native-build-math-split-fixed.log`, both under
+`C:\dev\helworks\builds\helengine-n64\cube-test`.
+
+Native build command (run from this checkout; `pwsh` was not on the session
+PATH, so the executor's `pwsh` launch failed and the native step was rerun with
+the explicit PowerShell 7 path against the finalized workspace):
+
+```powershell
+pwsh -NoProfile -File scripts/build.ps1 -Clean -Mode authored `
+  -GeneratedCoreRoot C:\dev\helworks\builds\helengine-n64\cube-test\work\n64\af84edd75b6b40dcbb726d5061a89c10\generated-core `
+  -FilesystemRoot C:\dev\helworks\builds\helengine-n64\cube-test\work\n64\af84edd75b6b40dcbb726d5061a89c10\builder\n64-dragonfs
+```
+
+Final artifact, copied to
+`C:\dev\helworks\builds\helengine-n64\cube-test\out\rom\helengine_n64_cube_test.z64`:
+
+- ROM SHA-256: `332cfc04fc1a33696ae40a505e9f054ed8f50ba036f2dff6a1199b62e89e756d`
+- ROM bytes: `9207808`
+- ELF load image: text `856040`, data `210945`, bss `10272`, total `1077257`
+- Toolchain image: `helengine-n64-toolchain:latest@sha256:efce4e8f134899c8f199c91c9eee2d26ae3bb562fc5d9702`
+
+`build/helengine_n64.map` lists `CubeTestSpinComponent::Update()`,
+`CubeTestSpinComponent::set_AngularSpeedRadians(float)`, and
+`GeneratedRuntimeCubeTestSpinComponentDeserializer::Deserialize(...)` inside
+`build/generated-core/helengine_core_unity.o`, so the original component runs
+through generated Core rather than native animation.
+
+Gopher64 stdout (`out\gopher-cube-stdout.log`) with no error lines:
+
+```text
+n64:core-ready
+n64:startup-scene id=cube_test
+n64:material-loaded id=Materials.rendering.cube_test.CubeTestSolid color=FFFFFFFF
+n64:model-loaded id=engine:model:cube vertices=24 indices=36
+n64:scene-ready cameras=1 drawables3d=1
+n64:first-authored-draw model=engine:model:cube material=n64-unlit calls=1
+n64:first-frame-complete
+```
+
+Rotation evidence (`out\frames`): five HelenUI captures 700 ms apart and eight
+captures 250 ms apart. Every consecutive pair differs only inside the cube's
+bounding box (roughly x 262-381, y 223-319 in the 640x480 window), between
+0.3% and 0.8% of the window pixels per interval, and the silhouette changes
+from a square face to a rotated outline with visible edges. The unlit white
+material renders every face the same color, so only the silhouette moves.
+Hardware execution remains unverified.
