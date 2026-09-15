@@ -10,6 +10,13 @@
 #include "system/io/file-stream.hpp"
 
 namespace helengine::n64 {
+    static std::string ToDragonFsRelativePath(const std::string& normalizedPath) {
+        if (normalizedPath.rfind("rom:/", 0) != 0) {
+            throw std::invalid_argument("N64 DragonFS path must start with rom:/.");
+        }
+        return normalizedPath.substr(5);
+    }
+
     Nintendo64ContentStreamSource::Nintendo64ContentStreamSource(std::string contentRootPath)
         : ContentRootPath(NormalizeRootPath(contentRootPath)) {
     }
@@ -27,7 +34,8 @@ namespace helengine::n64 {
             return false;
         }
         const std::string normalizedPath = NormalizeRelativePath(path);
-        return dfs_rom_size(normalizedPath.c_str()) >= 0;
+        const std::string dragonFsPath = ToDragonFsRelativePath(normalizedPath);
+        return dfs_rom_size(dragonFsPath.c_str()) >= 0;
     }
 
     FileStream* Nintendo64ContentStreamSource::OpenRead(const char* path) {
@@ -36,7 +44,8 @@ namespace helengine::n64 {
         }
 
         const std::string normalizedPath = NormalizeRelativePath(path);
-        const int handle = dfs_open(normalizedPath.c_str());
+        const std::string dragonFsPath = ToDragonFsRelativePath(normalizedPath);
+        const int handle = dfs_open(dragonFsPath.c_str());
         if (handle < 0) {
             throw std::runtime_error(std::string("N64 DragonFS open failed: ") + normalizedPath);
         }
