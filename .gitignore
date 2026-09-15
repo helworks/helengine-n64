@@ -1,0 +1,15 @@
+# Generated target artifacts and dependency checkouts.
+.deps/
+build/
+*.z64
+*.v64
+*.elf
+*.map
+*.sym
+*.stripped
+
+# Local tool and emulator state.
+.ares/
+*.log
+*.tmp
+

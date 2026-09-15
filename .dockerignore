@@ -1,0 +1,14 @@
+.git
+.git/**
+.deps/libdragon/build
+.deps/tiny3d/build
+build
+*.z64
+*.v64
+*.elf
+*.map
+*.sym
+*.stripped
+.ares
+*.log
+
