@@ -2,6 +2,7 @@ using helengine.baseplatform.Definitions;
 using helengine.baseplatform.Requests;
 using helengine.baseplatform.Results;
 using helengine.n64.builder;
+using System.Text.Json;
 
 namespace helengine.n64.builder.tests;
 
@@ -17,7 +18,9 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.Empty(definition.AssetCookCapabilities);
         Assert.Contains(definition.CodegenProfiles.Single().Settings, setting =>
             setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures
-            && setting.DefaultValue.Contains("textures", StringComparison.OrdinalIgnoreCase));
+            && setting.DefaultValue.Contains("shaders", StringComparison.OrdinalIgnoreCase)
+            && setting.DefaultValue.Contains("render2d", StringComparison.OrdinalIgnoreCase)
+            && setting.DefaultValue.Contains("text2d", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -29,6 +32,31 @@ public sealed class Nintendo64PlatformDefinitionTests {
             setting => setting.SettingId == PlatformCodegenSettingIds.EnabledFeatures);
 
         Assert.Equal(string.Empty, enabledFeatures.DefaultValue);
+    }
+
+    [Fact]
+    public void Create_UsesOnlyFeatureIdsDeclaredByHelengineCatalog() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+        string catalogPath = ResolveFeatureCatalogPath();
+        Assert.True(File.Exists(catalogPath), $"HelEngine feature catalog was not found at '{catalogPath}'.");
+
+        using JsonDocument catalog = JsonDocument.Parse(File.ReadAllText(catalogPath));
+        HashSet<string> knownFeatureIds = catalog.RootElement
+            .GetProperty("features")
+            .EnumerateArray()
+            .Select(feature => feature.GetProperty("id").GetString() ?? string.Empty)
+            .Where(featureId => !string.IsNullOrWhiteSpace(featureId))
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (PlatformSettingDefinition setting in definition.CodegenProfiles.Single().Settings.Where(setting =>
+                     setting.SettingId == PlatformCodegenSettingIds.EnabledFeatures
+                     || setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures)) {
+            foreach (string featureId in (setting.DefaultValue ?? string.Empty).Split(
+                         [';', ',', ' '],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
+                Assert.Contains(featureId, knownFeatureIds);
+            }
+        }
     }
 
     [Fact]
@@ -71,5 +99,31 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TextureRelativePathFieldId, "textures/cube.hetex")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.LightingModeFieldId, "lit")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TransparencyFieldId, "alpha")));
+    }
+
+    static string ResolveFeatureCatalogPath() {
+        string configuredRoot = Environment.GetEnvironmentVariable("HELENGINE_ROOT") ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(configuredRoot)) {
+            return Path.Combine(configuredRoot, "engine", "helengine.editor", "codegen", "features", "helengine-feature-catalog.json");
+        }
+
+        DirectoryInfo? currentDirectory = new(AppContext.BaseDirectory);
+        for (int depth = 0; depth < 10 && currentDirectory != null; depth++) {
+            string siblingCandidate = Path.Combine(
+                currentDirectory.FullName,
+                "helengine",
+                "engine",
+                "helengine.editor",
+                "codegen",
+                "features",
+                "helengine-feature-catalog.json");
+            if (File.Exists(siblingCandidate)) {
+                return siblingCandidate;
+            }
+
+            currentDirectory = currentDirectory.Parent;
+        }
+
+        return Path.Combine(AppContext.BaseDirectory, "helengine", "engine", "helengine.editor", "codegen", "features", "helengine-feature-catalog.json");
     }
 }

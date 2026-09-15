@@ -5,7 +5,8 @@ namespace helengine.n64.builder;
 
 /// <summary>Creates the editor-facing N64 platform contract.</summary>
 public static class Nintendo64PlatformDefinitionFactory {
-    const string ForcedDisabledFeatures = "debug_overlay;shaders;textures;audio;physics;input;ui;animation";
+    // Keep this list aligned with the checked-in codegen catalog and the n64-minimal preset.
+    const string ForcedDisabledFeatures = "debug_overlay;shaders;render2d;text2d";
 
     public static PlatformDefinition Create() {
         PlatformSettingDefinition[] buildSettings = [
