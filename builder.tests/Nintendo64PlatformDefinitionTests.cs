@@ -21,6 +21,17 @@ public sealed class Nintendo64PlatformDefinitionTests {
     }
 
     [Fact]
+    public void Create_LeavesEnabledFeaturesEmptyForMinimalN64Profile() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        PlatformSettingDefinition enabledFeatures = Assert.Single(
+            definition.CodegenProfiles.Single().Settings,
+            setting => setting.SettingId == PlatformCodegenSettingIds.EnabledFeatures);
+
+        Assert.Equal(string.Empty, enabledFeatures.DefaultValue);
+    }
+
+    [Fact]
     public void CookMaterial_EmitsOpaqueUnlitAuthoredColor() {
         Nintendo64PlatformAssetBuilder builder = new();
         PlatformMaterialCookResult result = builder.CookMaterial(new PlatformMaterialCookRequest(
