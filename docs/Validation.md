@@ -78,3 +78,16 @@ HelenUI capture showed the authored white cube face against the configured dark
 clear color. The final clean ROM uses the same serialized scene and runtime
 path, with diagnostic queue tracing removed. Hardware execution remains
 unverified.
+
+## cube_test focused checks
+
+- The regenerated N64 cooked scene contains two active roots and three
+  components: the authored camera, mesh, and original
+  `city.rendering.CubeTestSpinComponent`; unsupported UI, light, scaffold, and
+  orbit content is excluded by explicit authored N64 overrides.
+- `Float4CameraForwardTests` passes 2/2 in `helengine.core.tests`, covering
+  identity `-Z` forward and a nonidentity yaw through the engine's own
+  `float4.RotateVector` implementation.
+- The focused preserving-override editor test passes 1/1.
+- Standard package evidence is retained at
+  `C:\dev\helworks\builds\helengine-n64\cube-test\probe-package-final`.

@@ -135,7 +135,7 @@ bool Nintendo64RenderManager3D::ConfigureCamera(::ICamera* camera) {
     ::Entity* parent = camera->get_Parent();
     const ::float3 position = parent->get_Position();
     const ::float4 orientation = parent->get_Orientation();
-    const ::float3 forward = ::float4::RotateVector(::float3(0.0f, 0.0f, 1.0f), orientation);
+    const ::float3 forward = ::float4::RotateVector(::float3(0.0f, 0.0f, -1.0f), orientation);
     const ::float3 up = ::float4::RotateVector(::float3(0.0f, 1.0f, 0.0f), orientation);
     const ::float3 target = position + forward;
     T3DVec3 eye = {{position.X, position.Y, position.Z}};

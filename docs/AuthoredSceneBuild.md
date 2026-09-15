@@ -52,3 +52,30 @@ The target-side authored startup trace reaches `first-authored-draw` with
 `engine:model:cube` and `first-frame-complete`. The Gopher64 capture showed the
 authored white cube face against the configured dark clear color. Hardware
 execution remains unverified.
+
+## Existing demodisc cube_test
+
+The approved N64 scene build uses the existing authored source at
+`C:\dev\helprojs\demodisc\assets\scenes\rendering\cube_test.helen` and its
+original `city.rendering.CubeTestSpinComponent`. Regenerate that scene through
+the editor before running the normal N64 build:
+
+```powershell
+dotnet C:\dev\helworks\helengine\helengine.ui\helengine.editor.app\bin\Debug\net9.0-windows\helengine.editor.app.dll `
+  --project C:\dev\helprojs\demodisc\project.heproj `
+  --editor-command menu.generate-cube-test-scene
+
+dotnet C:\dev\helworks\helengine\helengine.ui\helengine.editor.app\bin\Debug\net9.0-windows\helengine.editor.app.dll `
+  --project C:\dev\helprojs\demodisc\project.heproj `
+  --build n64 --build-profile release `
+  --output C:\dev\helworks\builds\helengine-n64\cube-test\editor-output
+```
+
+The demodisc N64 build entry selects `cube_test`, runs the existing generation
+command as its release prebuild, and uses the N64 unlit/DragonFS/cartridge
+profiles. The authored N64 overrides retain the camera, cube mesh, and original
+spin component while excluding unsupported instruction/UI/light and orbit
+content. The N64 camera adapter uses the engine's canonical authored `-Z`
+forward axis; the Tiny3D SRT call continues to receive the authored quaternion.
+See `C:\dev\helworks\builds\helengine-n64\cube-test\post-override-inventory.md`
+for the cooked inventory and focused override regression result.
