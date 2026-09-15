@@ -14,8 +14,11 @@ authored-scene path.
 - Runtime material/model resolution: cooked platform-owned payloads.
 - Runtime storage: manifest-declared files staged into DragonFS and exposed as
   content-relative `rom:/` paths.
-- Unsupported features: textures, lighting, transparency, audio, physics,
-  input, UI, animation, and lights are rejected by metadata or cooking.
+- Unsupported features: textures, transparency, audio, physics, input, UI,
+  and animation are rejected by metadata or cooking. The material schema is
+  lit by default (Tiny3D vertex lighting) with an explicit `unlit` option;
+  directional and ambient lights are supported, up to seven directional
+  lights, while point and spot lights are rejected by editor packaging.
 
 ## Generated ABI record
 
