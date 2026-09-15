@@ -20,9 +20,11 @@ int Nintendo64BootHost::Run() {
     }
     debugf("n64:renderer-ready\n");
 
-    Renderer.Prepare(0.0f, 0.0f);
+    Clock.Reset(get_ticks_us());
     bool firstFrame = true;
     for (;;) {
+        Clock.Advance(get_ticks_us());
+        Renderer.Prepare(Clock.AngleX(), Clock.AngleY());
         if (!Video.BeginFrame()) {
             Renderer.Shutdown();
             Video.Shutdown();
@@ -44,3 +46,4 @@ int Nintendo64BootHost::Run() {
 }
 
 } // namespace helengine::n64
+

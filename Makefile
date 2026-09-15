@@ -16,7 +16,8 @@ OBJECTS := \
 	$(BUILD_DIR)/platform/n64/Nintendo64BootHost.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64Video.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64CubeMesh.o \
-	$(BUILD_DIR)/platform/n64/Nintendo64Renderer.o
+	$(BUILD_DIR)/platform/n64/Nintendo64Renderer.o \
+	$(BUILD_DIR)/platform/n64/FrameClock.o
 
 ifeq ($(D),1)
 N64_CXXFLAGS += -DHELENGINE_N64_DIAGNOSTIC=1
@@ -32,5 +33,6 @@ $(BUILD_DIR)/helengine_n64.elf: $(OBJECTS)
 
 clean:
 	rm -rf build helengine_n64.z64
+
 
 

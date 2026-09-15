@@ -1,5 +1,6 @@
 #pragma once
 
+#include "FrameClock.hpp"
 #include "Nintendo64Renderer.hpp"
 #include "Nintendo64Video.hpp"
 
@@ -12,6 +13,8 @@ public:
 private:
     Nintendo64Video Video;
     Nintendo64Renderer Renderer;
+    FrameClock Clock;
 };
 
 } // namespace helengine::n64
+
