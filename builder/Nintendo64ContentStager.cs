@@ -26,7 +26,7 @@ public sealed class Nintendo64ContentStager {
             string relativePath = NormalizeRelativePath(artifact.RelativePath);
             if (!paths.Add(relativePath)) throw new InvalidOperationException($"N64 cooked artifact path collision: '{relativePath}'.");
             string sourcePath = ResolveUnderRoot(sourceRoot, relativePath);
-            if (!File.Exists(sourcePath)) throw new FileNotFoundException($"N64 cooked artifact '{relativePath}' was not found.", sourcePath);
+            if (!File.Exists(sourcePath)) throw new FileNotFoundException($"N64 cooked artifact '{relativePath}' was not found under package source root '{sourceRoot}'.", sourcePath);
             string destinationPath = ResolveUnderRoot(stagingRoot, relativePath);
             string destinationDirectory = Path.GetDirectoryName(destinationPath) ?? stagingRoot;
             Directory.CreateDirectory(destinationDirectory);

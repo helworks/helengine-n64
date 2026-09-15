@@ -87,6 +87,12 @@ The minimal N64 codegen profile leaves the enabled-feature option unset, which
 means no catalog feature is enabled by default. Its forced-disabled list uses
 only feature ids declared by the checked-in HelEngine catalog.
 
+The editor copies the final package tree into the builder working directory's
+`package-source` subdirectory before invoking the platform builder. N64
+DragonFS staging reads manifest-declared `cooked/...` paths from that package
+source root; the sibling workspace `cooked` directory remains the editor's
+cook output and is not the builder input root.
+
 After changing the N64 builder source, rebuild the registered builder assembly
 without rebuilding its already available HelEngine references:
 

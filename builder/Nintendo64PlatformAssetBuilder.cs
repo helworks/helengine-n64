@@ -56,7 +56,8 @@ public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
             }
             new Nintendo64SceneCompatibilityValidator().Validate(request.Manifest);
             progressReporter.Report(new PlatformBuildProgressUpdate("Stage DragonFS", "manifest", 0, 1, "Staging declared N64 cooked artifacts."));
-            new Nintendo64ContentStager().Stage(request.Manifest.CookedArtifacts, request.WorkingRoot, stagingRoot, cancellationToken);
+            string packageSourceRoot = ResolvePackageSourceRoot(request.WorkingRoot);
+            new Nintendo64ContentStager().Stage(request.Manifest.CookedArtifacts, packageSourceRoot, stagingRoot, cancellationToken);
             new Nintendo64StartupManifestWriter().Write(request.GeneratedCoreCppRootPath, request.Manifest);
             progressReporter.Report(new PlatformBuildProgressUpdate("Build Native ROM", "helengine_n64.z64", 0, 1, "Building authored N64 runtime."));
             NativeBuildExecutor.Build(request.GeneratedCoreCppRootPath, stagingRoot, request.OutputRoot, cancellationToken);
@@ -81,5 +82,18 @@ public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
             [.. diagnostics],
             request.Manifest.Scenes.Select(scene => new PlatformBuildItemOutcome(scene.SceneId, succeeded ? PlatformBuildItemOutcomeKind.Succeeded : PlatformBuildItemOutcomeKind.Failed)).ToArray(),
             request.Manifest.LooseAssets.Select(asset => new PlatformBuildItemOutcome(asset.AssetId, succeeded ? PlatformBuildItemOutcomeKind.Succeeded : PlatformBuildItemOutcomeKind.Failed)).ToArray());
+    }
+
+    static string ResolvePackageSourceRoot(string workingRootPath) {
+        if (string.IsNullOrWhiteSpace(workingRootPath)) {
+            throw new ArgumentException("Builder working root is required.", nameof(workingRootPath));
+        }
+
+        string packageSourceRoot = Path.Combine(Path.GetFullPath(workingRootPath), "package-source");
+        if (!Directory.Exists(packageSourceRoot)) {
+            throw new DirectoryNotFoundException($"N64 builder package source root '{packageSourceRoot}' was not found.");
+        }
+
+        return packageSourceRoot;
     }
 }
