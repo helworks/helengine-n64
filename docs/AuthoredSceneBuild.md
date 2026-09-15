@@ -103,3 +103,7 @@ $env:HELENGINE_BUILD_WORKSPACE_ROOT = 'C:\dev\helworks\builds\helengine-n64\cube
 Set it before the editor build command so the generated N64 builder invokes the
 same checkout that owns the pinned toolchain and keeps the isolated build graph
 under the visible cube-test output directory.
+
+The minimal N64 codegen profile leaves the enabled-feature option unset, which
+means no catalog feature is enabled by default. Its forced-disabled list uses
+only feature ids declared by the checked-in HelEngine catalog.
