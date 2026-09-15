@@ -32,3 +32,17 @@ $contentRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
     'helengine-n64-build', './build/n64-content-source-tests')
 & docker @contentRun
 if ($LASTEXITCODE -ne 0) { throw 'N64 content-source tests failed.' }
+
+$lightCompile = @(
+    'run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', 'g++',
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-pedantic',
+    '-I.', 'tests/Nintendo64LightMathTests.cpp', 'src/platform/n64/Nintendo64LightMath.cpp',
+    '-o', 'build/n64-light-math-tests'
+)
+& docker @lightCompile
+if ($LASTEXITCODE -ne 0) { throw 'N64 light-math test compilation failed.' }
+$lightRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', './build/n64-light-math-tests')
+& docker @lightRun
+if ($LASTEXITCODE -ne 0) { throw 'N64 light-math tests failed.' }
