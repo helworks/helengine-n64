@@ -1,7 +1,10 @@
 
 param(
     [switch]$Clean,
-    [switch]$Debug
+    [switch]$Debug,
+    [ValidateSet('diagnostic', 'authored')]
+    [string]$Mode = 'diagnostic',
+    [string]$GeneratedCoreRoot = 'generated/core'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,7 +28,7 @@ if ($Clean) {
     & docker @($makePrefix + @('clean'))
     if ($LASTEXITCODE -ne 0) { throw 'N64 clean failed.' }
 }
-$makeArgs = @($makePrefix)
+$makeArgs = @($makePrefix, "HELENGINE_N64_MODE=$Mode", "HELENGINE_N64_GENERATED_CORE_ROOT=$GeneratedCoreRoot")
 if ($Debug) { $makeArgs += 'D=1' }
 & docker @makeArgs
 if ($LASTEXITCODE -ne 0) { throw 'N64 ROM build failed.' }
