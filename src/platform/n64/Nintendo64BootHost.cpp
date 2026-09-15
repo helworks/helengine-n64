@@ -13,16 +13,28 @@ int Nintendo64BootHost::Run() {
     }
     debugf("n64:video-ready\n");
 
+    if (!Renderer.Initialize()) {
+        debugf("n64:error renderer-initialization-failed\n");
+        Video.Shutdown();
+        return 2;
+    }
+    debugf("n64:renderer-ready\n");
+
+    Renderer.Prepare(0.0f, 0.0f);
     bool firstFrame = true;
     for (;;) {
         if (!Video.BeginFrame()) {
-            Video.Shutdown();
-            return 2;
-        }
-        Video.Clear();
-        if (!Video.EndFrame()) {
+            Renderer.Shutdown();
             Video.Shutdown();
             return 3;
+        }
+        Renderer.BeginScene();
+        Video.Clear();
+        Renderer.DrawCube();
+        if (!Video.EndFrame()) {
+            Renderer.Shutdown();
+            Video.Shutdown();
+            return 4;
         }
         if (firstFrame) {
             debugf("n64:first-frame-complete\n");
