@@ -1,6 +1,7 @@
 using helengine.baseplatform.Builders;
 using helengine.baseplatform.Definitions;
 using helengine.baseplatform.Descriptors;
+using helengine.baseplatform.Manifest;
 using helengine.baseplatform.Reporting;
 using helengine.baseplatform.Requests;
 using helengine.baseplatform.Results;
@@ -10,6 +11,10 @@ namespace helengine.n64.builder;
 /// <summary>Platform discovery and build contract for the Nintendo 64 target.</summary>
 public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
     readonly Nintendo64MaterialCooker MaterialCooker = new();
+
+    /// <summary>Executes builder-owned platform cook work items declared by the manifest.</summary>
+    readonly Nintendo64PlatformCookWorkItemExecutor CookWorkItemExecutor = new();
+
     readonly INintendo64NativeBuildExecutor NativeBuildExecutor;
 
     public Nintendo64PlatformAssetBuilder()
@@ -55,8 +60,21 @@ public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
                 throw new InvalidOperationException($"N64 builder received manifest for platform '{request.Manifest.PlatformName}'.");
             }
             new Nintendo64SceneCompatibilityValidator().Validate(request.Manifest);
-            progressReporter.Report(new PlatformBuildProgressUpdate("Stage DragonFS", "manifest", 0, 1, "Staging declared N64 cooked artifacts."));
             string packageSourceRoot = ResolvePackageSourceRoot(request.WorkingRoot);
+
+            PlatformCookWorkItem[] cookWorkItems = request.Manifest.PlatformCookWorkItems ?? [];
+            for (int workItemIndex = 0; workItemIndex < cookWorkItems.Length; workItemIndex++) {
+                cancellationToken.ThrowIfCancellationRequested();
+                CookWorkItemExecutor.Execute(cookWorkItems[workItemIndex], packageSourceRoot);
+                progressReporter.Report(new PlatformBuildProgressUpdate(
+                    "Cook Platform Artifacts",
+                    cookWorkItems[workItemIndex].OutputLogicalArtifactId,
+                    workItemIndex + 1,
+                    cookWorkItems.Length,
+                    $"Cooked platform-owned artifact '{cookWorkItems[workItemIndex].OutputRelativePath}'."));
+            }
+
+            progressReporter.Report(new PlatformBuildProgressUpdate("Stage DragonFS", "manifest", 0, 1, "Staging declared N64 cooked artifacts."));
             new Nintendo64ContentStager().Stage(request.Manifest.CookedArtifacts, packageSourceRoot, stagingRoot, cancellationToken);
             new Nintendo64StartupManifestWriter().Write(request.GeneratedCoreCppRootPath, request.Manifest);
             progressReporter.Report(new PlatformBuildProgressUpdate("Build Native ROM", "helengine_n64.z64", 0, 1, "Building authored N64 runtime."));

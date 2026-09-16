@@ -1,0 +1,159 @@
+using System.Drawing;
+using System.Drawing.Imaging;
+using helengine.baseplatform.Manifest;
+using helengine.editor;
+using helengine.n64.builder;
+
+namespace helengine.n64.builder.tests;
+
+/// <summary>
+/// Verifies the N64 builder-owned texture cook decodes, downscales, and writes cooked runtime textures.
+/// </summary>
+public sealed class Nintendo64TextureCookTests {
+    /// <summary>
+    /// Ensures a large source image is downscaled to the configured maximum resolution while preserving alpha.
+    /// </summary>
+    [Fact]
+    public void Cook_DownscalesLargeSourceAndPreservesAlpha() {
+        string sourcePath = WriteSourcePng(256, 256);
+        try {
+            TextureAsset decoded = new Nintendo64SourceTextureDecoder().Decode(sourcePath);
+            Assert.Equal(256, decoded.Width);
+            Assert.Equal(TextureAssetColorFormat.Rgba32, decoded.ColorFormat);
+
+            TextureAsset cooked = new Nintendo64TextureCooker().Cook(decoded, new TextureAssetProcessorSettings {
+                MaxResolution = 64,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            });
+
+            Assert.Equal(64, cooked.Width);
+            Assert.Equal(64, cooked.Height);
+            Assert.Equal(64 * 64 * 4, cooked.Colors.Length);
+            Assert.Equal((byte)0, cooked.Colors[3]);
+        } finally {
+            File.Delete(sourcePath);
+        }
+    }
+
+    /// <summary>
+    /// Ensures a source smaller than the maximum resolution is never upscaled.
+    /// </summary>
+    [Fact]
+    public void Cook_DoesNotUpscaleSmallSource() {
+        string sourcePath = WriteSourcePng(16, 16);
+        try {
+            TextureAsset cooked = new Nintendo64TextureCooker().Cook(
+                new Nintendo64SourceTextureDecoder().Decode(sourcePath),
+                new TextureAssetProcessorSettings { MaxResolution = 64, ColorFormat = TextureAssetColorFormat.Rgba32, AlphaPrecision = TextureAssetAlphaPrecision.A8 });
+
+            Assert.Equal(16, cooked.Width);
+            Assert.Equal(16, cooked.Height);
+        } finally {
+            File.Delete(sourcePath);
+        }
+    }
+
+    /// <summary>
+    /// Ensures the executor writes the cooked payload under the package source root at the work item's output path.
+    /// </summary>
+    [Fact]
+    public void Execute_WritesCookedTextureUnderPackageSourceRoot() {
+        string root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-n64\\cube-test\\tests", Guid.NewGuid().ToString("N"));
+        string sourcePath = WriteSourcePng(32, 32);
+        try {
+            Directory.CreateDirectory(root);
+            PlatformCookWorkItem workItem = CreateWorkItem(sourcePath, "texture", "cooked/textures/icon.hasset");
+
+            new Nintendo64PlatformCookWorkItemExecutor().Execute(workItem, root);
+
+            string cookedPath = Path.Combine(root, "cooked", "textures", "icon.hasset");
+            Assert.True(File.Exists(cookedPath));
+            helengine.TextureAsset cooked = Assert.IsType<helengine.TextureAsset>(
+                helengine.files.AssetSerializer.DeserializeFromBytes(File.ReadAllBytes(cookedPath)));
+            Assert.Equal(32, cooked.Width);
+            Assert.Equal("icon", cooked.Id);
+        } finally {
+            File.Delete(sourcePath);
+            if (Directory.Exists(root)) {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Ensures an unsupported source asset kind fails loudly instead of being silently skipped.
+    /// </summary>
+    [Fact]
+    public void Execute_RejectsUnsupportedSourceAssetKind() {
+        string sourcePath = WriteSourcePng(8, 8);
+        try {
+            PlatformCookWorkItem workItem = CreateWorkItem(sourcePath, "audio", "cooked/audio/clip.hasset");
+            Assert.Throws<InvalidOperationException>(() => new Nintendo64PlatformCookWorkItemExecutor().Execute(workItem, Path.GetTempPath()));
+        } finally {
+            File.Delete(sourcePath);
+        }
+    }
+
+    /// <summary>
+    /// Ensures a non-positive maximum resolution fails loudly instead of silently skipping the downscale.
+    /// </summary>
+    [Fact]
+    public void Cook_ThrowsWhenMaxResolutionIsNotPositive() {
+        string sourcePath = WriteSourcePng(16, 16);
+        try {
+            TextureAsset decoded = new Nintendo64SourceTextureDecoder().Decode(sourcePath);
+            Assert.Throws<InvalidOperationException>(() => new Nintendo64TextureCooker().Cook(decoded, new TextureAssetProcessorSettings {
+                MaxResolution = 0,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            }));
+        } finally {
+            File.Delete(sourcePath);
+        }
+    }
+
+    /// <summary>
+    /// Writes one transparent-cornered test PNG and returns its path.
+    /// </summary>
+    /// <param name="width">Source width in pixels.</param>
+    /// <param name="height">Source height in pixels.</param>
+    /// <returns>Absolute path of the written PNG.</returns>
+    static string WriteSourcePng(int width, int height) {
+        string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".png");
+        using Bitmap bitmap = new(width, height);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                bitmap.SetPixel(x, y, Color.FromArgb(0, 10, 20, 30));
+            }
+        }
+        bitmap.Save(path, ImageFormat.Png);
+        return path;
+    }
+
+    /// <summary>
+    /// Creates one platform cook work item for the supplied source path, kind, and output path.
+    /// </summary>
+    /// <param name="sourcePath">Absolute source asset path.</param>
+    /// <param name="sourceAssetKind">Source asset kind carried by the work item.</param>
+    /// <param name="outputRelativePath">Runtime-relative cooked output path.</param>
+    /// <returns>Platform cook work item.</returns>
+    static PlatformCookWorkItem CreateWorkItem(string sourcePath, string sourceAssetKind, string outputRelativePath) {
+        return new PlatformCookWorkItem(
+            "work-1",
+            sourcePath,
+            sourceAssetKind,
+            "n64",
+            "runtime-texture",
+            outputRelativePath,
+            "icon",
+            "source-hash",
+            "settings-hash",
+            Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
+                MaxResolution = 64,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            }),
+            []);
+    }
+}
