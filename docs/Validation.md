@@ -287,9 +287,16 @@ camera/light instruction Blueprint on N64 (demodisc `88f8326`). The regenerated
 on that root, and `CubeTestSun` carries no override at all.
 
 - ROM: `C:\dev\helworks\builds\helengine-n64\cube-test\out\rom\helengine_n64_cube_test_sprites.z64`
-- SHA-256: `ed49ccd8b655dafe7f4e455d91057560f0a48bb4f05036bd7c7aceed644d378c`
+- SHA-256: `c76898beca48b7186187c79251c70781fbf4b583e472542f9727ecf2cf4c65d7`
 - Bytes: `1589248`
 - Build workspace: `22ca7b9ba847446c9270e583a1079321`
+
+The first ROM to render sprites was
+`ed49ccd8b655dafe7f4e455d91057560f0a48bb4f05036bd7c7aceed644d378c`. Extracting
+the sprite geometry into the host-tested `Nintendo64SpriteGeometry` seam relinked
+it to the hash above with no behaviour change: the boot trace is line for line
+identical, and the overlay-pixel count below reproduces at exactly 932 in the
+same region. The evidence in this section is quoted from the relinked ROM.
 
 ### Build
 
@@ -365,7 +372,7 @@ differs, and every difference bounding box lies inside the cube's bounding box
 | 7 -> 8 | 8760 | 2.8516% | 262, 223, 377, 319 |
 
 Overlay-pixel check, counting pixels more than 12 in summed channel distance
-from the clear colour `(16, 16, 24)`, inside the emulator client area
+from the captured clear colour `(16, 16, 24)`, inside the emulator client area
 (x 9-633, y 31-479, which excludes the window chrome) and outside the cube
 bounding box:
 
@@ -373,6 +380,12 @@ bounding box:
   x 23-68, y 365-424.
 - The count is identical in every frame, as a static overlay should be, and far
   above the 200 the lit-only ROM would have to beat.
+
+The host clears to `RGBA32(16, 18, 24, 255)`
+(`Nintendo64Video::Clear`). Captures read it back as `(16, 16, 24)` because the
+RGBA5551 frame buffer keeps only the top five bits of each channel, so green 18
+quantizes to 16. The count is taken against the captured value, which is what a
+screenshot can actually contain.
 
 Read directly, frame 1 shows the cube at roughly 45 degrees with a bright left
 face and a dark right face, and three icons in the lower left: a D-pad cross, a

@@ -130,8 +130,7 @@ serializer, chosen by the file's `HELE` magic bytes), box-filtered down to at
 most 64 pixels on its larger side, and written into `package-source` as
 straight RGBA32. The editor deliberately leaves builder-owned outputs out of
 the manifest's cooked artifacts, so staging copies the manifest artifacts and
-the builder's own cook outputs into `builder
-64-dragonfs`; staging the
+the builder's own cook outputs into the `n64-dragonfs` staging tree; staging the
 manifest alone would ship a ROM whose sprite textures are missing.
 
 The registered native executor passes `-Clean` to the Docker build wrapper so
