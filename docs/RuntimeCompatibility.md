@@ -6,16 +6,19 @@ authored-scene path.
 ## Published contract
 
 - Platform: `n64`
-- Graphics profile: `n64-unlit`
-- Material schema: `n64-unlit-v1`
+- Graphics profile: `n64-standard`
+- Material schema: `n64-standard-v1`
 - Build profiles: `debug`, `release`
 - Serialization: generated C++ profile declares `LittleEndian`; cooked payloads
   are decoded through `AssetSerializer` and generated serializers on the target.
 - Runtime material/model resolution: cooked platform-owned payloads.
 - Runtime storage: manifest-declared files staged into DragonFS and exposed as
   content-relative `rom:/` paths.
-- Unsupported features: textures, lighting, transparency, audio, physics,
-  input, UI, animation, and lights are rejected by metadata or cooking.
+- Unsupported features: textures, transparency, audio, physics, input, UI,
+  and animation are rejected by metadata or cooking. The material schema is
+  lit by default (Tiny3D vertex lighting) with an explicit `unlit` option;
+  directional and ambient lights are supported, up to seven directional
+  lights, while point and spot lights are rejected by editor packaging.
 
 ## Generated ABI record
 
@@ -52,8 +55,13 @@ hooks use C linkage.
 ## Target constraints
 
 - 320x240, 16-bit color, double buffering, and a 16-bit depth surface.
-- Explicit `NO_LIGHT`, depth compare/write, `AA_NONE`, and back-face culling
-  for the default opaque material.
+- Lit materials draw with Tiny3D vertex lighting: the extracted ambient color
+  and up to seven directional lights are pushed with `t3d_light_set_ambient`,
+  `t3d_light_set_directional`, and `t3d_light_set_count` before the draw.
+  `NO_LIGHT` is applied only to `unlit` materials and to the built-in
+  diagnostic cube, whose vertex RGBA is its complete color source. Depth
+  compare/write, `AA_NONE`, and back-face culling apply to the default opaque
+  material in both cases.
 - One perspective camera and one 3D drawable are required at runtime.
 - Authored camera and drawable entities use layer mask `1`; scene loading
   preserves the serialized mask before camera queue filtering.

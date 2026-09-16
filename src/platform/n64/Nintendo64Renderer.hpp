@@ -3,6 +3,7 @@
 #include <t3d/t3d.h>
 
 #include "Nintendo64CubeMesh.hpp"
+#include "Nintendo64FrameLights.hpp"
 
 namespace helengine::n64 {
 
@@ -13,7 +14,10 @@ public:
     void BeginScene();
     void Prepare(float angleX, float angleY);
     void SetAuthoredCamera(const T3DMat4& viewMatrix, float fieldOfViewRadians, float aspectRatio, float nearPlane, float farPlane);
-    void DrawAuthoredMesh(const T3DVertPacked* vertices, uint32_t vertexCount, const uint16_t* indices, uint32_t indexCount, const T3DMat4& modelMatrix, uint32_t color, bool doubleSided);
+    /// Draws one authored indexed mesh with the supplied model matrix, applying the frame's
+    /// ambient and directional lights when the material is lit and disabling Tiny3D lighting
+    /// entirely when it is not. Vertex colors are already baked into the packed vertices.
+    void DrawAuthoredMesh(const T3DVertPacked* vertices, uint32_t vertexCount, const uint16_t* indices, uint32_t indexCount, const T3DMat4& modelMatrix, bool doubleSided, bool lit, const Nintendo64FrameLights& lights);
     void DrawCube();
     void Shutdown();
     bool IsInitialized() const { return Initialized; }

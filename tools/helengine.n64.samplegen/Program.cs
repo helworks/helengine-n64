@@ -88,7 +88,7 @@ using EditorPlatformBuildScenePackager packager = new EditorPlatformBuildScenePa
     null,
     n64Builder,
     "debug",
-    "n64-unlit",
+    "n64-standard",
     shaders);
 EditorPlatformBuildScenePackagerResult result = packager.Package(new[] { sceneId }, packageRoot);
 Console.WriteLine($"authored-scene-bytes={new FileInfo(authoredScenePath).Length}");

@@ -39,11 +39,11 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
         PlatformBuildRequest request = new(
             manifest,
             [new PlatformBuildTargetVariant("release", "n64", "n64", "release")],
-            [new PlatformCookProfile("release", "release", new PlatformCookProfileCapabilities("n64", "n64-unlit", "pcm-buffered", "n64-scene-v1", PlatformSerializationEndianness.LittleEndian))],
+            [new PlatformCookProfile("release", "release", new PlatformCookProfileCapabilities("n64", "n64-standard", "pcm-buffered", "n64-scene-v1", PlatformSerializationEndianness.LittleEndian))],
             outputRoot,
             workingRoot,
             "release",
-            "n64-unlit",
+            "n64-standard",
             "release",
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),

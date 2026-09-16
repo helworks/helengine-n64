@@ -12,9 +12,21 @@ toolchain. The runtime initializes DragonFS, loads the startup scene through
 Tiny3D renderer.
 
 The current runtime supports one perspective camera, one static triangle-list
-mesh, and one opaque unlit material. Authored world position, scale, rotation,
-camera transform/projection, and base color are read from the generated runtime
-objects. The old hardcoded cube is only used in diagnostic mode.
+mesh, and one opaque material drawn through the `n64-standard` graphics profile
+and the `n64-standard-v1` material schema. That schema's `Lighting` choice field
+(`lighting-mode`) defaults to `lit`; `unlit` must be authored explicitly. Lit
+materials carry packed per-vertex normals and are drawn with Tiny3D vertex
+lighting.
+
+Scene lights come exclusively from authored `DirectionalLightComponent` and
+`AmbientLightComponent` entities: the runtime extracts them each frame and
+applies no built-in ambient term, so a lit scene with no authored light renders
+black. At most seven directional lights are accepted; point and spot lights are
+rejected by editor packaging.
+
+Authored world position, scale, rotation, camera transform/projection, and base
+color are read from the generated runtime objects. The old hardcoded cube is
+only used in diagnostic mode and is drawn unlit.
 
 ## Reproducible fixture
 
@@ -68,11 +80,11 @@ dotnet C:\dev\helworks\helengine\helengine.ui\helengine.editor.app\bin\Debug\net
 ```
 
 The demodisc N64 build entry selects `cube_test`, runs the existing generation
-command as its release prebuild, and uses the N64 unlit/DragonFS/cartridge
-profiles. The authored N64 overrides retain the camera, cube mesh, and original
-spin component while excluding unsupported instruction/UI/light and orbit
-content. The N64 camera adapter uses the engine's canonical authored `-Z`
-forward axis; the Tiny3D SRT call continues to receive the authored quaternion.
+command as its release prebuild, and uses the `n64-standard`/DragonFS/cartridge
+profiles. The authored N64 overrides retain the camera, cube mesh, original spin
+component, and the `CubeTestSun` directional light, while excluding unsupported
+instruction/UI and orbit content. The N64 camera adapter uses the engine's
+canonical authored `-Z` forward axis; the Tiny3D SRT call continues to receive the authored quaternion.
 See `C:\dev\helworks\builds\helengine-n64\cube-test\post-override-inventory.md`
 for the cooked inventory and focused override regression result.
 

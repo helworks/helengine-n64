@@ -8,6 +8,8 @@
 #include "IRenderVisitor3D.hpp"
 #include "ICamera.hpp"
 
+#include "platform/n64/Nintendo64FrameLights.hpp"
+
 namespace helengine::n64 {
 
 class Nintendo64Renderer;
@@ -31,6 +33,8 @@ private:
     Nintendo64Renderer* Renderer;
     int32_t DrawCallCount = 0;
     bool HasLoggedAuthoredDraw = false;
+    /// Ambient and directional lights extracted once per Draw and shared by every lit drawable in that frame.
+    Nintendo64FrameLights FrameLights;
 
     static uint32_t PackColor(const ::PlatformMaterialAsset* material);
     ::RuntimeMaterial* BuildMaterialAsset(::PlatformMaterialAsset* materialAsset);

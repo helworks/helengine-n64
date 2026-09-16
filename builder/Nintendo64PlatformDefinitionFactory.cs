@@ -30,32 +30,35 @@ public static class Nintendo64PlatformDefinitionFactory {
             ]);
 
         PlatformMaterialSchemaDefinition materialSchema = new(
-            Nintendo64MaterialSchemaIds.UnlitSchemaId,
-            "N64 Opaque Unlit",
-            ["n64-unlit"],
+            Nintendo64MaterialSchemaIds.StandardSchemaId,
+            "N64 Opaque",
+            [Nintendo64MaterialSchemaIds.StandardGraphicsProfileId],
             [
                 new(Nintendo64MaterialSchemaIds.BaseColorFieldId, "Base Color", PlatformMaterialFieldKind.Color, "#FFFFFFFF", true, []),
                 new(Nintendo64MaterialSchemaIds.TextureRelativePathFieldId, "Texture", PlatformMaterialFieldKind.Text, string.Empty, false, []),
-                new(Nintendo64MaterialSchemaIds.LightingModeFieldId, "Lighting", PlatformMaterialFieldKind.Choice, "unlit", true, ["unlit"]),
+                new(Nintendo64MaterialSchemaIds.LightingModeFieldId, "Lighting", PlatformMaterialFieldKind.Choice, Nintendo64MaterialSchemaIds.LightingLitValue, true, [Nintendo64MaterialSchemaIds.LightingLitValue, Nintendo64MaterialSchemaIds.LightingUnlitValue]),
                 new(Nintendo64MaterialSchemaIds.TransparencyFieldId, "Transparency", PlatformMaterialFieldKind.Choice, "opaque", true, ["opaque"])
             ]);
 
         PlatformBuildProfileDefinition[] profiles = [
-            new("debug", "Debug", "N64 development build", "n64-unlit", "default", buildSettings),
-            new("release", "Release", "N64 release build", "n64-unlit", "default", buildSettings)
+            new("debug", "Debug", "N64 development build", Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, "default", buildSettings),
+            new("release", "Release", "N64 release build", Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, "default", buildSettings)
         ];
 
         return new PlatformDefinition(
             "n64",
             "Nintendo 64",
             profiles,
-            [new PlatformGraphicsProfileDefinition("n64-unlit", "N64 Unlit", "Tiny3D opaque unlit renderer", [])],
+            [new PlatformGraphicsProfileDefinition(Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, "N64 Standard", "Tiny3D opaque renderer with hardware vertex lighting", [])],
             [new PlatformAssetRequirementDefinition("scene", "Scene", true, ["helen"])],
             [materialSchema],
             [
                 new PlatformComponentSupportRule("helengine.meshcomponent", PlatformComponentSupportKind.Transform, "One static triangle-list mesh is supported.", "Remove unsupported mesh components."),
                 new PlatformComponentSupportRule("helengine.cameracomponent", PlatformComponentSupportKind.Transform, "One perspective camera is supported.", "Keep one authored camera."),
-                new PlatformComponentSupportRule("helengine.lightcomponent", PlatformComponentSupportKind.Unsupported, "N64 v0.2 uses explicit NO_LIGHT rendering.", "Remove light components.")
+                new PlatformComponentSupportRule("helengine.DirectionalLightComponent", PlatformComponentSupportKind.Transform, "Tiny3D supports up to seven directional lights.", string.Empty),
+                new PlatformComponentSupportRule("helengine.AmbientLightComponent", PlatformComponentSupportKind.Transform, "Tiny3D supports one summed ambient color.", string.Empty),
+                new PlatformComponentSupportRule("helengine.PointLightComponent", PlatformComponentSupportKind.Unsupported, "N64 lighting supports directional and ambient lights only.", "Remove point lights or exclude them on N64."),
+                new PlatformComponentSupportRule("helengine.SpotLightComponent", PlatformComponentSupportKind.Unsupported, "N64 lighting supports directional and ambient lights only.", "Remove spot lights or exclude them on N64.")
             ],
             [codegen],
             [new PlatformStorageProfileDefinition("dragonfs-package", "DragonFS Package", PlatformStorageProfileKind.LooseFiles, "n64-dragonfs-package", false)],
