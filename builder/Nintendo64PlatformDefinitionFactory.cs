@@ -1,5 +1,6 @@
 using helengine.baseplatform.Definitions;
 using helengine.baseplatform.Profiles;
+using helengine.editor;
 
 namespace helengine.n64.builder;
 
@@ -45,6 +46,16 @@ public static class Nintendo64PlatformDefinitionFactory {
             new("release", "Release", "N64 release build", Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, "default", buildSettings)
         ];
 
+        PlatformAssetCookCapabilityDefinition[] assetCookCapabilities = [
+            new PlatformAssetCookCapabilityDefinition(
+                "texture",
+                "runtime-texture",
+                PlatformAssetCookOwnershipKind.BuilderOwned,
+                "n64-texture",
+                CreateDefaultSerializedTextureCookSettings(),
+                CreateTextureFormatCapabilities())
+        ];
+
         return new PlatformDefinition(
             "n64",
             "Nintendo 64",
@@ -63,6 +74,33 @@ public static class Nintendo64PlatformDefinitionFactory {
             [codegen],
             [new PlatformStorageProfileDefinition("dragonfs-package", "DragonFS Package", PlatformStorageProfileKind.LooseFiles, "n64-dragonfs-package", false)],
             [new PlatformMediaProfileDefinition("n64-cartridge", "N64 Cartridge", PlatformMediaLayoutKind.InstallTree, false, true)],
-            new RuntimeGenerationContract(RuntimeMaterialResolutionMode.CookedPlatformOwned, true, PackagedPathPolicy.ContentRelativeOnly));
+            new RuntimeGenerationContract(RuntimeMaterialResolutionMode.CookedPlatformOwned, true, PackagedPathPolicy.ContentRelativeOnly),
+            assetCookCapabilities: assetCookCapabilities);
+    }
+
+    /// <summary>
+    /// Creates the serialized default N64 texture cook settings used when an asset carries no N64 override.
+    /// </summary>
+    /// <returns>Serialized default N64 texture settings.</returns>
+    static string CreateDefaultSerializedTextureCookSettings() {
+        return Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
+            MaxResolution = 64,
+            ColorFormat = TextureAssetColorFormat.Rgba32,
+            AlphaPrecision = TextureAssetAlphaPrecision.A8
+        });
+    }
+
+    /// <summary>
+    /// Creates the N64 texture format capability set: one straight RGBA source format with opaque or eight-bit alpha.
+    /// </summary>
+    /// <returns>N64 texture format capabilities.</returns>
+    static PlatformTextureFormatCapabilityDefinition CreateTextureFormatCapabilities() {
+        return new PlatformTextureFormatCapabilityDefinition(
+            [TextureAssetColorFormat.Rgba32.ToString()],
+            [TextureAssetAlphaPrecision.Opaque, TextureAssetAlphaPrecision.A8],
+            [
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Rgba32.ToString(), TextureAssetAlphaPrecision.Opaque),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Rgba32.ToString(), TextureAssetAlphaPrecision.A8)
+            ]);
     }
 }

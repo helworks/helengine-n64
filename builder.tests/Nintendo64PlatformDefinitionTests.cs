@@ -1,6 +1,7 @@
 using helengine.baseplatform.Definitions;
 using helengine.baseplatform.Requests;
 using helengine.baseplatform.Results;
+using helengine.editor;
 using helengine.n64.builder;
 using System.Text.Json;
 
@@ -20,7 +21,6 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.Equal(new[] { "lit", "unlit" }, lighting.AllowedValues);
         Assert.Equal(new[] { "debug", "release" }, definition.BuildProfiles.Select(profile => profile.ProfileId));
         Assert.All(definition.BuildProfiles, profile => Assert.Equal("n64-standard", profile.GraphicsProfileId));
-        Assert.Empty(definition.AssetCookCapabilities);
         Assert.Contains(definition.CodegenProfiles.Single().Settings, setting =>
             setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures
             && setting.DefaultValue.Contains("shaders", StringComparison.OrdinalIgnoreCase)
@@ -135,6 +135,45 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TextureRelativePathFieldId, "textures/cube.hetex")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.LightingModeFieldId, "pbr")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TransparencyFieldId, "alpha")));
+    }
+
+    [Fact]
+    public void Create_DeclaresBuilderOwnedTextureCookCapability() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        PlatformAssetCookCapabilityDefinition capability = Assert.Single(definition.AssetCookCapabilities);
+        Assert.Equal("texture", capability.SourceAssetKind);
+        Assert.Equal("runtime-texture", capability.TargetArtifactKind);
+        Assert.Equal(PlatformAssetCookOwnershipKind.BuilderOwned, capability.OwnershipKind);
+        Assert.Equal("n64-texture", capability.SettingsContractId);
+
+        TextureAssetProcessorSettings settings = Nintendo64TextureCookSettingsSerializer.Deserialize(capability.DefaultSerializedPlatformSettings);
+        Assert.Equal(64, settings.MaxResolution);
+        Assert.Equal(TextureAssetColorFormat.Rgba32, settings.ColorFormat);
+        Assert.Equal(TextureAssetAlphaPrecision.A8, settings.AlphaPrecision);
+        Assert.Contains(TextureAssetColorFormat.Rgba32.ToString(), capability.TextureFormatCapabilities.SupportedColorFormatIds);
+    }
+
+    [Fact]
+    public void TextureCookSettings_RoundTripThroughSerializer() {
+        TextureAssetProcessorSettings original = new() {
+            MaxResolution = 32,
+            ColorFormat = TextureAssetColorFormat.Rgba32,
+            AlphaPrecision = TextureAssetAlphaPrecision.Opaque
+        };
+
+        TextureAssetProcessorSettings roundTripped = Nintendo64TextureCookSettingsSerializer.Deserialize(
+            Nintendo64TextureCookSettingsSerializer.Serialize(original));
+
+        Assert.Equal(32, roundTripped.MaxResolution);
+        Assert.Equal(TextureAssetColorFormat.Rgba32, roundTripped.ColorFormat);
+        Assert.Equal(TextureAssetAlphaPrecision.Opaque, roundTripped.AlphaPrecision);
+    }
+
+    [Fact]
+    public void TextureCookSettings_RejectUnsupportedColorFormat() {
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"maxResolution\":64,\"colorFormat\":\"Bogus\",\"alphaPrecision\":\"A8\"}"));
     }
 
     static string ResolveFeatureCatalogPath() {
