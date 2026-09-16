@@ -4,6 +4,17 @@ The authored mode is selected with `-Mode authored` and requires a generated
 Core tree. It refuses to fall back to the diagnostic cube when `Core.hpp` is
 missing. Diagnostic mode remains available with `-Mode diagnostic`.
 
+## Toolchain prerequisite
+
+N64 currently requires a C++ code generator built from csharpcodegen commit
+`b477b70` or later, which is the first to emit `runtime/native_runtime.hpp`. The
+shared `csharpcodegen\codegen\bin\Release` executable is stale and does not
+contain it; generating the N64 Core against that build produces a tree that
+fails to compile with `'HeCppString' does not name a type`. The working setup -
+an isolated master worktree registered for the `n64` platform row only - is
+recorded in `docs/Validation.md`. Check this before reading a native compile
+failure as a problem with the authored scene.
+
 The generic editor/build graph supplies the generated Core and cooked manifest.
 The N64 builder stages only manifest-declared scene/material/model payloads,
 writes `n64_runtime_scene_catalog.hpp/.cpp`, and invokes the existing Docker
@@ -104,6 +115,45 @@ The editor copies the final package tree into the builder working directory's
 DragonFS staging reads manifest-declared `cooked/...` paths from that package
 source root; the sibling workspace `cooked` directory remains the editor's
 cook output and is not the builder input root.
+
+The N64 codegen profile no longer forces `render2d` and `sprites` off, so a
+scene that carries authored `SpriteComponent`s auto-detects both features and
+the runtime renders them in a screen-space 2D pass after the Tiny3D 3D pass.
+`text2d` stays forced off, so authored `TextComponent`s and
+`RoundedRectComponent`s are still not drawn: an instruction overlay reaches an
+N64 ROM as its icons alone.
+
+`Core::Draw` only drives the 3D render manager. `RenderManager2D::Draw` is a
+hook each host calls for itself, so the N64 runtime host runs the 2D pass right
+after `Core::Draw` and before `EndFrame`, while the frame buffer is still
+attached.
+
+`Draw` is the only 2D hook the N64 host currently drives. The generated
+`RenderManager2D` also declares `Update()` and `FlushReleasedTextures()`, and
+neither is called from the N64 frame loop. Nothing on this platform needs them
+yet - sprite textures are built once from cooked payloads and never released or
+re-uploaded mid-frame - but a feature that relies on either one (deferred
+texture release, animated or streamed 2D content) will need the host to start
+driving them first.
+
+The N64 codegen profile declares all eleven `codegen-use-*` options the C++
+backend reads, every one of them true. Exceptions and RTTI are the two the Core
+visibly breaks without - it throws from generated deserializers and selects
+generic implementations through `dynamic_cast` - but any option left undeclared
+inherits whichever runtime profile the CLI preset carries, and both the
+`native-core-boot` and `n64-minimal` presets carry one that would regenerate a
+Core this repository cannot compile. The full set with its evidence is in
+`docs/RuntimeCompatibility.md`.
+
+The builder owns texture cooking for N64. Each declared cook work item is
+decoded (authored image files through the system decoder, editor-generated
+engine texture assets such as the platform font atlases through the asset
+serializer, chosen by the file's `HELE` magic bytes), box-filtered down to at
+most 64 pixels on its larger side, and written into `package-source` as
+straight RGBA32. The editor deliberately leaves builder-owned outputs out of
+the manifest's cooked artifacts, so staging copies the manifest artifacts and
+the builder's own cook outputs into the `n64-dragonfs` staging tree; staging the
+manifest alone would ship a ROM whose sprite textures are missing.
 
 The registered native executor passes `-Clean` to the Docker build wrapper so
 dependency files from an earlier generated Core profile cannot affect the

@@ -278,3 +278,165 @@ from the same generated workspace and booted again in Gopher64:
 - Four captures 300 ms apart (`out\frames-lit-final`) each differ inside the
   cube bounding box only (2.2% to 3.1% of window pixels per interval), so the
   packing refactor left the rendered output and rotation unchanged.
+
+## cube_test sprites
+
+The demodisc `cube_test` scene no longer excludes the shared console
+camera/light instruction Blueprint on N64 (demodisc `88f8326`). The regenerated
+`assets/scenes/rendering/cube_test.helen` keeps only the `dc` existence override
+on that root, and `CubeTestSun` carries no override at all.
+
+- ROM: `C:\dev\helworks\builds\helengine-n64\cube-test\out\rom\helengine_n64_cube_test_sprites.z64`
+- SHA-256: `c76898beca48b7186187c79251c70781fbf4b583e472542f9727ecf2cf4c65d7`
+- Bytes: `1589248`
+- Build workspace: `22ca7b9ba847446c9270e583a1079321`
+
+The first ROM to render sprites was
+`ed49ccd8b655dafe7f4e455d91057560f0a48bb4f05036bd7c7aceed644d378c`. Extracting
+the sprite geometry into the host-tested `Nintendo64SpriteGeometry` seam relinked
+it to the hash above with no behaviour change: the boot trace is line for line
+identical, and the overlay-pixel count below reproduces at exactly 932 in the
+same region. The evidence in this section is quoted from the relinked ROM.
+
+### Build
+
+Runtime feature manifest:
+
+```
+Enabled runtime features: render2d (AutoDetected), sprites (AutoDetected). Disabled runtime features: debug_overlay (ForcedDisabled), host_file_system (NotIncluded), managed_metadata_only (ForcedDisabled), physics3d.diagnostics (NotIncluded), reflection_like_runtime (NotIncluded), shaders (ForcedDisabled), text2d (ForcedDisabled), text_processing (NotIncluded).
+```
+
+All 32 builder-owned cook work items completed, ending with
+`runtime-texture:cooked/fonts/default.hetex`. DragonFS staging wrote 38 files
+and 536741 bytes, including 30 `cooked/imported/<hash>` textures and both cooked
+font atlases. Every `cooked/imported/*` payload is 16526 bytes: a 142-byte asset
+header plus 64*64*4 straight RGBA32, confirming the max-64-pixel downscale cook.
+
+The cooked scene carries exactly three `helengine.SpriteComponent` records, all
+with two positive `Size` axes, so no sprite falls back to its source rect on a
+single axis:
+
+| Entity | Cooked texture | Size | SourceRect |
+| --- | --- | --- | --- |
+| `CameraIconPrimary` | `cooked/imported/568d5f9c...` | 48x48 | 0.1406, 0.1406, 0.7227, 0.7227 |
+| `CameraIconSecondary` | `cooked/imported/34795cd0...` | 38x48 | 0.2109, 0.0781, 0.5820, 0.7275 |
+| `LightIcon` | `cooked/imported/cc1e9bd8...` | 46x46 | 0.2109, 0.2109, 0.5820, 0.5820 |
+
+### Boot trace
+
+`out\gopher-sprites-stdout.log`, verbatim:
+
+```
+n64:authored-runtime-start
+n64:video-ready
+n64:renderer-ready
+n64:dragonfs-ready
+n64:core-ready
+n64:startup-scene id=cube_test
+n64:texture-loaded id=runtime-texture:cooked/imported/568d5f9ca3b6b3b30b85dfef3ca6746324806b161c8e79298069b4a50878468c size=64x64
+n64:texture-loaded id=runtime-texture:cooked/imported/34795cd0703804daa63e3f9eb76b7a644b1baaab10bcaadc6889f6791f257758 size=64x64
+n64:texture-loaded id=runtime-texture:cooked/fonts/demodiscbody.hetex size=64x64
+n64:texture-loaded id=runtime-texture:cooked/imported/cc1e9bd820dda8c73ad90fde92ee40595d67460755740c344e91130a22940f30 size=64x64
+n64:material-loaded id=Materials.rendering.cube_test.CubeTestSolid color=FFFFFFFF lit=1
+n64:model-loaded id=engine:model:cube vertices=24 indices=36
+n64:scene-ready cameras=1 drawables3d=1 drawables2d=6 directional=1 ambient=0
+n64:first-authored-draw model=engine:model:cube material=n64-standard lit=1 lights=1 calls=1
+n64:first-sprite-draw size=12x12 calls=1
+n64:first-frame-complete
+```
+
+`n64:first-sprite-skipped` does not appear, so no sprite resolved to an empty
+destination, and there is no `n64:error` line. `drawables2d=6` is the three
+sprites plus the two text labels and the panel rounded rect, which the runtime
+accepts into the queue and draws as no-ops.
+
+`size=12x12` is the destination extent, not a defect: the overlay is authored
+against a reference canvas four times wider than the 320x240 frame buffer, so
+the 48x48 authored icon scales to 12x12 frame-buffer pixels, shown at 24x24 in
+the 2x emulator window.
+
+### Frame evidence
+
+Eight captures 250 ms apart in `out\frames-sprites`. Every consecutive pair
+differs, and every difference bounding box lies inside the cube's bounding box
+(x 262-381, y 223-319), so the cube still rotates and the overlay is static:
+
+| Pair | Changed pixels | Share | Difference bbox |
+| --- | --- | --- | --- |
+| 1 -> 2 | 7076 | 2.3034% | 262, 223, 380, 319 |
+| 2 -> 3 | 1296 | 0.4219% | 262, 223, 333, 319 |
+| 3 -> 4 | 1304 | 0.4245% | 262, 223, 345, 319 |
+| 4 -> 5 | 1336 | 0.4349% | 262, 225, 353, 319 |
+| 5 -> 6 | 8784 | 2.8594% | 266, 225, 365, 319 |
+| 6 -> 7 | 8112 | 2.6406% | 270, 225, 377, 319 |
+| 7 -> 8 | 8760 | 2.8516% | 262, 223, 377, 319 |
+
+Overlay-pixel check, counting pixels more than 12 in summed channel distance
+from the captured clear colour `(16, 16, 24)`, inside the emulator client area
+(x 9-633, y 31-479, which excludes the window chrome) and outside the cube
+bounding box:
+
+- frames 1, 2, 5 and 8 each report **932** pixels, in the region
+  x 23-68, y 365-424.
+- The count is identical in every frame, as a static overlay should be, and far
+  above the 200 the lit-only ROM would have to beat.
+
+The host clears to `RGBA32(16, 18, 24, 255)`
+(`Nintendo64Video::Clear`). Captures read it back as `(16, 16, 24)` because the
+RGBA5551 frame buffer keeps only the top five bits of each channel, so green 18
+quantizes to 16. The count is taken against the captured value, which is what a
+screenshot can actually contain.
+
+Read directly, frame 1 shows the cube at roughly 45 degrees with a bright left
+face and a dark right face, and three icons in the lower left: a D-pad cross, a
+round analog stick in a circular housing beside it, and below them a dark round
+button carrying a red circle glyph. Frame 5 shows the cube rotated nearly
+face-on, a bright front face with a thin dark sliver of side wall, while the
+three icons are pixel-identical and in the same place.
+
+**The button art is PlayStation, not N64.** The red circle is the PS2 Circle
+button and the D-pad plus single analog stick is the PS2 layout. The Blueprint's
+icon entities carry a `ps2` baseline sprite with per-platform overrides for
+`gamecube`, `wii`, `switch` and `wiiu` only; there is an `n64` family in
+`assets/textures/instructions/controls/generated/manifest.json`, but no
+`DesktopInstructionPlatformIconSpec` rows reference it, so N64 inherits the ps2
+baseline. This proves the sprite path end to end; the art still needs N64 rows.
+
+Neither instruction label nor the panel rounded rect is drawn, as expected:
+`text2d` is forced off and `DrawRoundedRect` is a deliberate no-op.
+
+### Regenerated Core differences
+
+Against the last known-good workspace (`5e4a87850e7c4a52aa6325ca4edd70f5`), the
+regenerated Core has 800 files instead of 807:
+
+- **Added (11):** `GeneratedRuntimeSpriteComponentDeserializer`,
+  `GeneratedRuntimeTextComponentDeserializer`,
+  `GeneratedRuntimeRoundedRectComponentDeserializer` and
+  `GeneratedRuntimeViewportComponentDeserializer` (header and source each),
+  which follow directly from enabling `render2d` and `sprites`, plus the three
+  new runtime support headers `runtime/native_runtime.hpp`,
+  `runtime/native_allocation.hpp` and `runtime/native_memory_ops.hpp`.
+- **Removed (18):** shader and text content-processing types that the newer
+  capability-aware codegen prunes - `ShaderCompileTarget`,
+  `ShaderContentProcessorBase_1`, `ShaderTargetDescriptor(s)`,
+  `StandardShaderVariant(s)`, `StandardShaderVariantMakefileManifestWriter`,
+  `TextContentProcessor` and `TextContentManagerConfiguration`. `text_processing`
+  correspondingly moved from `AutoDetected` to `NotIncluded`; the font atlases
+  are still cooked and staged, and the runtime still loads
+  `cooked/fonts/demodiscbody.hetex` as a texture.
+- **Size-changed (164):** almost all of these are a single added
+  `#include "runtime/native_string.hpp"` line, plus renumbered
+  `__nativeOwnershipTarget_*` and `__ctor_arg_*` temporaries. The one
+  behavioural change spotted is in `Core.cpp`, which gained an early
+  `if (this->RenderManager3D == nullptr) { return 0.0; }` guard - that is
+  helengine `c0157e99`, not a codegen difference.
+
+### Toolchain note
+
+This ROM was produced with an isolated csharpcodegen master worktree at
+`C:\dev\helworks\builds\helengine-n64\codegen-master` (`b477b70`), registered
+for the `n64` platform row only. The shared
+`csharpcodegen\codegen\bin\Release` output remains a day stale and still lacks
+`runtime/native_runtime.hpp`; building N64 against it fails with
+`'HeCppString' does not name a type`.

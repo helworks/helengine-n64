@@ -62,3 +62,31 @@ $vertexRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
     'helengine-n64-build', './build/n64-vertex-packing-tests')
 & docker @vertexRun
 if ($LASTEXITCODE -ne 0) { throw 'N64 vertex-packing tests failed.' }
+
+$texelCompile = @(
+    'run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', 'g++',
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-pedantic',
+    '-I.', 'tests/Nintendo64TexelPackingTests.cpp', 'src/platform/n64/Nintendo64TexelPacking.cpp',
+    '-o', 'build/n64-texel-packing-tests'
+)
+& docker @texelCompile
+if ($LASTEXITCODE -ne 0) { throw 'N64 texel-packing test compilation failed.' }
+$texelRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', './build/n64-texel-packing-tests')
+& docker @texelRun
+if ($LASTEXITCODE -ne 0) { throw 'N64 texel-packing tests failed.' }
+
+$spriteCompile = @(
+    'run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', 'g++',
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-pedantic',
+    '-I.', 'tests/Nintendo64SpriteGeometryTests.cpp', 'src/platform/n64/Nintendo64SpriteGeometry.cpp',
+    '-o', 'build/n64-sprite-geometry-tests'
+)
+& docker @spriteCompile
+if ($LASTEXITCODE -ne 0) { throw 'N64 sprite-geometry test compilation failed.' }
+$spriteRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', './build/n64-sprite-geometry-tests')
+& docker @spriteRun
+if ($LASTEXITCODE -ne 0) { throw 'N64 sprite-geometry tests failed.' }

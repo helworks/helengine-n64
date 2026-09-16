@@ -1,12 +1,74 @@
 using helengine.baseplatform.Definitions;
 using helengine.baseplatform.Profiles;
+using helengine.editor;
 
 namespace helengine.n64.builder;
 
 /// <summary>Creates the editor-facing N64 platform contract.</summary>
 public static class Nintendo64PlatformDefinitionFactory {
-    // Keep this list aligned with the checked-in codegen catalog and the n64-minimal preset.
-    const string ForcedDisabledFeatures = "debug_overlay;shaders;render2d;text2d";
+    // Every id here must exist in the checked-in engine feature catalog, which
+    // Create_UsesOnlyFeatureIdsDeclaredByHelengineCatalog asserts. This list deliberately does NOT match the
+    // generator's own n64-minimal preset: that preset also forces render2d off and selects the custom-retro
+    // runtime, which would strip the sprite pass and the std types the shipped generated Core is built on.
+    // render2d and sprites stay enabled so authored SpriteComponents reach the runtime; text2d stays disabled
+    // until the N64 text pass exists.
+    const string ForcedDisabledFeatures = "debug_overlay;shaders;text2d";
+
+    /// <summary>
+    /// Codegen option id selecting <c>std::string</c> as the generated Core's string storage.
+    /// </summary>
+    public const string UseStdStringSettingId = "codegen-use-std-string";
+
+    /// <summary>
+    /// Codegen option id selecting <c>std::vector</c> as the generated Core's dynamic list storage.
+    /// </summary>
+    public const string UseStdVectorSettingId = "codegen-use-std-vector";
+
+    /// <summary>
+    /// Codegen option id selecting <c>std::unordered_map</c> as the generated Core's dictionary storage.
+    /// </summary>
+    public const string UseStdUnorderedMapSettingId = "codegen-use-std-unordered-map";
+
+    /// <summary>
+    /// Codegen option id selecting <c>std::unordered_set</c> as the generated Core's hash-set storage.
+    /// </summary>
+    public const string UseStdUnorderedSetSettingId = "codegen-use-std-unordered-set";
+
+    /// <summary>
+    /// Codegen option id selecting <c>std::function</c> as the generated Core's delegate storage.
+    /// </summary>
+    public const string UseStdFunctionSettingId = "codegen-use-std-function";
+
+    /// <summary>
+    /// Codegen option id selecting <c>std::chrono</c> as the generated Core's monotonic clock source.
+    /// </summary>
+    public const string UseStdChronoSettingId = "codegen-use-std-chrono";
+
+    /// <summary>
+    /// Codegen option id selecting <c>std::shared_ptr</c> as the generated Core's shared span ownership.
+    /// </summary>
+    public const string UseStdSharedPtrSettingId = "codegen-use-std-shared-ptr";
+
+    /// <summary>
+    /// Codegen option id selecting the standard C++ math library for the generated Core's numeric helpers.
+    /// </summary>
+    public const string UseStdMathSettingId = "codegen-use-std-math";
+
+    /// <summary>
+    /// Codegen option id selecting the hosted file-stream implementation, which the N64 build redirects to
+    /// its own content stream source through the native file system header and type settings.
+    /// </summary>
+    public const string UseHostedFileSystemSettingId = "codegen-use-hosted-file-system";
+
+    /// <summary>
+    /// Codegen option id selecting C++ exception unwinding for the generated Core.
+    /// </summary>
+    public const string UseExceptionsSettingId = "codegen-use-exceptions";
+
+    /// <summary>
+    /// Codegen option id selecting compiler RTTI for the generated Core's casts and generic dispatch.
+    /// </summary>
+    public const string UseRttiSettingId = "codegen-use-rtti";
 
     public static PlatformDefinition Create() {
         PlatformSettingDefinition[] buildSettings = [
@@ -26,7 +88,32 @@ public static class Nintendo64PlatformDefinitionFactory {
                 new("pointer-size-bytes", "Pointer Size (Bytes)", PlatformSettingKind.Text, "4", true, []),
                 new("type-remaps", "Type Remaps", PlatformSettingKind.Text, "System.Numerics.Vector2=helengine.float2;System.Numerics.Vector3=helengine.float3;System.Numerics.Vector4=helengine.float4;System.Numerics.Quaternion=helengine.float4", true, []),
                 new("native-file-system-header", "Native File System Header", PlatformSettingKind.Text, "\"platform/n64/Nintendo64ContentStreamSource.hpp\"", true, []),
-                new("native-file-system-type", "Native File System Type", PlatformSettingKind.Text, "helengine::n64::Nintendo64ContentStreamSource", true, [])
+                new("native-file-system-type", "Native File System Type", PlatformSettingKind.Text, "helengine::n64::Nintendo64ContentStreamSource", true, []),
+                // All eleven codegen-use-* knobs the C++ generator reads are declared here, not just the two
+                // the Core visibly breaks without. Anything left undeclared falls through to whichever runtime
+                // profile the CLI preset happens to carry, and a shift in that default silently regenerates a
+                // Core this repository's native build cannot compile - which is exactly how this branch lost a
+                // day. Every value below is true because that is what the shipped generated Core was built
+                // with and what it needs: std::string and std::vector back the generated asset fields and
+                // system/io/directory.hpp #errors without them, the unordered containers back the generated
+                // dictionaries and hash sets, std::function backs delegates, std::chrono backs Stopwatch,
+                // std::shared_ptr backs shared span storage, std::math backs system/math.hpp and
+                // system/number.hpp, the hosted file stream is what the native file system settings below
+                // redirect into Nintendo64ContentStreamSource, and the Core throws from generated
+                // deserializers and selects generic implementations through dynamic_cast. The libdragon
+                // toolchain compiles the generated Core with exceptions and RTTI on: n64.mk passes neither
+                // -fno-exceptions nor -fno-rtti, so the GCC defaults apply.
+                new(UseStdStringSettingId, "Use std::string", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseStdVectorSettingId, "Use std::vector", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseStdUnorderedMapSettingId, "Use std::unordered_map", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseStdUnorderedSetSettingId, "Use std::unordered_set", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseStdFunctionSettingId, "Use std::function", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseStdChronoSettingId, "Use std::chrono", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseStdSharedPtrSettingId, "Use std::shared_ptr", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseStdMathSettingId, "Use Standard Math", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseHostedFileSystemSettingId, "Use Hosted File System", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseExceptionsSettingId, "Use C++ Exceptions", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseRttiSettingId, "Use C++ RTTI", PlatformSettingKind.Boolean, "true", true, [])
             ]);
 
         PlatformMaterialSchemaDefinition materialSchema = new(
@@ -43,6 +130,16 @@ public static class Nintendo64PlatformDefinitionFactory {
         PlatformBuildProfileDefinition[] profiles = [
             new("debug", "Debug", "N64 development build", Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, "default", buildSettings),
             new("release", "Release", "N64 release build", Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, "default", buildSettings)
+        ];
+
+        PlatformAssetCookCapabilityDefinition[] assetCookCapabilities = [
+            new PlatformAssetCookCapabilityDefinition(
+                "texture",
+                "runtime-texture",
+                PlatformAssetCookOwnershipKind.BuilderOwned,
+                "n64-texture",
+                CreateDefaultSerializedTextureCookSettings(),
+                CreateTextureFormatCapabilities())
         ];
 
         return new PlatformDefinition(
@@ -63,6 +160,33 @@ public static class Nintendo64PlatformDefinitionFactory {
             [codegen],
             [new PlatformStorageProfileDefinition("dragonfs-package", "DragonFS Package", PlatformStorageProfileKind.LooseFiles, "n64-dragonfs-package", false)],
             [new PlatformMediaProfileDefinition("n64-cartridge", "N64 Cartridge", PlatformMediaLayoutKind.InstallTree, false, true)],
-            new RuntimeGenerationContract(RuntimeMaterialResolutionMode.CookedPlatformOwned, true, PackagedPathPolicy.ContentRelativeOnly));
+            new RuntimeGenerationContract(RuntimeMaterialResolutionMode.CookedPlatformOwned, true, PackagedPathPolicy.ContentRelativeOnly),
+            assetCookCapabilities: assetCookCapabilities);
+    }
+
+    /// <summary>
+    /// Creates the serialized default N64 texture cook settings used when an asset carries no N64 override.
+    /// </summary>
+    /// <returns>Serialized default N64 texture settings.</returns>
+    static string CreateDefaultSerializedTextureCookSettings() {
+        return Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
+            MaxResolution = 64,
+            ColorFormat = TextureAssetColorFormat.Rgba32,
+            AlphaPrecision = TextureAssetAlphaPrecision.A8
+        });
+    }
+
+    /// <summary>
+    /// Creates the N64 texture format capability set: one straight RGBA source format with opaque or eight-bit alpha.
+    /// </summary>
+    /// <returns>N64 texture format capabilities.</returns>
+    static PlatformTextureFormatCapabilityDefinition CreateTextureFormatCapabilities() {
+        return new PlatformTextureFormatCapabilityDefinition(
+            [TextureAssetColorFormat.Rgba32.ToString()],
+            [TextureAssetAlphaPrecision.Opaque, TextureAssetAlphaPrecision.A8],
+            [
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Rgba32.ToString(), TextureAssetAlphaPrecision.Opaque),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Rgba32.ToString(), TextureAssetAlphaPrecision.A8)
+            ]);
     }
 }

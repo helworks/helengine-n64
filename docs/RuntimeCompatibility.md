@@ -14,11 +14,13 @@ authored-scene path.
 - Runtime material/model resolution: cooked platform-owned payloads.
 - Runtime storage: manifest-declared files staged into DragonFS and exposed as
   content-relative `rom:/` paths.
-- Unsupported features: textures, transparency, audio, physics, input, UI,
-  and animation are rejected by metadata or cooking. The material schema is
-  lit by default (Tiny3D vertex lighting) with an explicit `unlit` option;
-  directional and ambient lights are supported, up to seven directional
-  lights, while point and spot lights are rejected by editor packaging.
+- Supported runtime features: 2D sprite rendering with `SpriteComponent` and
+  the generated `Core::Draw` 2D pass. Materials are lit by default (Tiny3D
+  vertex lighting) with an explicit `unlit` option; directional and ambient
+  lights are supported, up to seven directional lights.
+- Unsupported features: transparency, audio, physics, input, animation, text
+  rendering, and rounded rectangles are rejected by metadata or cooking. Point
+  and spot lights are rejected by editor packaging.
 
 ## Generated ABI record
 
@@ -28,11 +30,39 @@ with the pinned C++ generator and the N64 profile:
 ```text
 --platform n64 --language cpp --endianness little
 --preset native-core-boot
+--set codegen-forced-disabled-features=debug_overlay;shaders;text2d
 --set generated-math-convention=native-column-vector
 --set pointer-size-bytes=4
 --set native-file-system-header="platform/n64/Nintendo64ContentStreamSource.hpp"
 --set native-file-system-type=helengine::n64::Nintendo64ContentStreamSource
+--set codegen-use-std-string=true
+--set codegen-use-std-vector=true
+--set codegen-use-std-unordered-map=true
+--set codegen-use-std-unordered-set=true
+--set codegen-use-std-function=true
+--set codegen-use-std-chrono=true
+--set codegen-use-std-shared-ptr=true
+--set codegen-use-std-math=true
+--set codegen-use-hosted-file-system=true
+--set codegen-use-exceptions=true
+--set codegen-use-rtti=true
 ```
+
+Every `codegen-use-*` option the C++ backend reads is set explicitly. An option
+left out inherits whichever runtime profile the chosen preset carries, and
+`native-core-boot` carries `stl-lite`, which turns exceptions and RTTI off; the
+`n64-minimal` preset carries `custom-retro`, which additionally turns off
+`std::string` and `std::vector` and forces `render2d` off. Either default
+produces a Core this repository's native build cannot compile.
+`builder/Nintendo64PlatformDefinitionFactory.cs` is the source of truth for
+these values, and `Create_DeclaresEveryCodegenUseKnobTheGeneratorReads` pins
+them.
+
+The generator itself is pinned too: N64 requires a `csharpcodegen` build from
+commit `b477b70` or later, which is the first to emit
+`runtime/native_runtime.hpp`. An older generator produces a Core that fails to
+compile with `'HeCppString' does not name a type`. The working setup is
+recorded in `docs/Validation.md`.
 
 The authored build uses the generic generated interfaces for:
 

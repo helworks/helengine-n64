@@ -1,6 +1,7 @@
 using helengine.baseplatform.Definitions;
 using helengine.baseplatform.Requests;
 using helengine.baseplatform.Results;
+using helengine.editor;
 using helengine.n64.builder;
 using System.Text.Json;
 
@@ -20,12 +21,64 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.Equal(new[] { "lit", "unlit" }, lighting.AllowedValues);
         Assert.Equal(new[] { "debug", "release" }, definition.BuildProfiles.Select(profile => profile.ProfileId));
         Assert.All(definition.BuildProfiles, profile => Assert.Equal("n64-standard", profile.GraphicsProfileId));
-        Assert.Empty(definition.AssetCookCapabilities);
-        Assert.Contains(definition.CodegenProfiles.Single().Settings, setting =>
-            setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures
-            && setting.DefaultValue.Contains("shaders", StringComparison.OrdinalIgnoreCase)
-            && setting.DefaultValue.Contains("render2d", StringComparison.OrdinalIgnoreCase)
-            && setting.DefaultValue.Contains("text2d", StringComparison.OrdinalIgnoreCase));
+        PlatformSettingDefinition forcedDisabled = Assert.Single(
+            definition.CodegenProfiles.Single().Settings,
+            setting => setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures);
+        Assert.Contains("shaders", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("text2d", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("debug_overlay", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("render2d", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sprites", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Create_DeclaresExceptionsAndRttiBecauseTheGeneratedCoreNeedsBoth() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        PlatformSettingDefinition useExceptions = Assert.Single(
+            definition.CodegenProfiles.Single().Settings,
+            setting => setting.SettingId == Nintendo64PlatformDefinitionFactory.UseExceptionsSettingId);
+        PlatformSettingDefinition useRtti = Assert.Single(
+            definition.CodegenProfiles.Single().Settings,
+            setting => setting.SettingId == Nintendo64PlatformDefinitionFactory.UseRttiSettingId);
+        Assert.Equal("true", useExceptions.DefaultValue);
+        Assert.Equal("true", useRtti.DefaultValue);
+    }
+
+    /// <summary>
+    /// Pins the complete set of <c>codegen-use-*</c> knobs the C++ generator reads, with the values the
+    /// shipped generated Core was produced with. Any knob the profile leaves undeclared falls through to
+    /// whichever runtime profile the generator CLI preset carries, so a shift in that default would otherwise
+    /// surface as a native compile error hundreds of generated files deep instead of as a failing test here.
+    /// </summary>
+    [Fact]
+    public void Create_DeclaresEveryCodegenUseKnobTheGeneratorReads() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        Dictionary<string, string> expectedCodegenUseSettings = new(StringComparer.Ordinal) {
+            [Nintendo64PlatformDefinitionFactory.UseStdStringSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdVectorSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdUnorderedMapSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdUnorderedSetSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdFunctionSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdChronoSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdSharedPtrSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdMathSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseHostedFileSystemSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseExceptionsSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseRttiSettingId] = "true"
+        };
+
+        Dictionary<string, string> declaredCodegenUseSettings = definition.CodegenProfiles
+            .Single()
+            .Settings
+            .Where(setting => setting.SettingId.StartsWith("codegen-use-", StringComparison.Ordinal))
+            .ToDictionary(setting => setting.SettingId, setting => setting.DefaultValue, StringComparer.Ordinal);
+
+        Assert.Equal(expectedCodegenUseSettings.OrderBy(entry => entry.Key, StringComparer.Ordinal), declaredCodegenUseSettings.OrderBy(entry => entry.Key, StringComparer.Ordinal));
+        Assert.All(
+            definition.CodegenProfiles.Single().Settings.Where(setting => setting.SettingId.StartsWith("codegen-use-", StringComparison.Ordinal)),
+            setting => Assert.Equal(PlatformSettingKind.Boolean, setting.SettingKind));
     }
 
     [Fact]
@@ -135,6 +188,59 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TextureRelativePathFieldId, "textures/cube.hetex")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.LightingModeFieldId, "pbr")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TransparencyFieldId, "alpha")));
+    }
+
+    [Fact]
+    public void Create_DeclaresBuilderOwnedTextureCookCapability() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        PlatformAssetCookCapabilityDefinition capability = Assert.Single(definition.AssetCookCapabilities);
+        Assert.Equal("texture", capability.SourceAssetKind);
+        Assert.Equal("runtime-texture", capability.TargetArtifactKind);
+        Assert.Equal(PlatformAssetCookOwnershipKind.BuilderOwned, capability.OwnershipKind);
+        Assert.Equal("n64-texture", capability.SettingsContractId);
+
+        TextureAssetProcessorSettings settings = Nintendo64TextureCookSettingsSerializer.Deserialize(capability.DefaultSerializedPlatformSettings);
+        Assert.Equal(64, settings.MaxResolution);
+        Assert.Equal(TextureAssetColorFormat.Rgba32, settings.ColorFormat);
+        Assert.Equal(TextureAssetAlphaPrecision.A8, settings.AlphaPrecision);
+        Assert.Contains(TextureAssetColorFormat.Rgba32.ToString(), capability.TextureFormatCapabilities.SupportedColorFormatIds);
+    }
+
+    [Fact]
+    public void TextureCookSettings_RoundTripThroughSerializer() {
+        TextureAssetProcessorSettings original = new() {
+            MaxResolution = 32,
+            ColorFormat = TextureAssetColorFormat.Rgba32,
+            AlphaPrecision = TextureAssetAlphaPrecision.Opaque
+        };
+
+        TextureAssetProcessorSettings roundTripped = Nintendo64TextureCookSettingsSerializer.Deserialize(
+            Nintendo64TextureCookSettingsSerializer.Serialize(original));
+
+        Assert.Equal(32, roundTripped.MaxResolution);
+        Assert.Equal(TextureAssetColorFormat.Rgba32, roundTripped.ColorFormat);
+        Assert.Equal(TextureAssetAlphaPrecision.Opaque, roundTripped.AlphaPrecision);
+    }
+
+    [Fact]
+    public void TextureCookSettings_RejectUnsupportedColorFormat() {
+        // "Bogus" is not an enum member at all, so it fails the parse and never reaches the supported-format
+        // check. "Rgba4444" parses cleanly, which is what actually exercises the N64-only-emits-Rgba32 branch.
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"maxResolution\":64,\"colorFormat\":\"Bogus\",\"alphaPrecision\":\"A8\"}"));
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"maxResolution\":64,\"colorFormat\":\"Rgba4444\",\"alphaPrecision\":\"A8\"}"));
+    }
+
+    [Fact]
+    public void TextureCookSettings_RejectPayloadMissingRequiredProperties() {
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"colorFormat\":\"Rgba32\",\"alphaPrecision\":\"A8\"}"));
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"maxResolution\":64,\"alphaPrecision\":\"A8\"}"));
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"maxResolution\":64,\"colorFormat\":\"Rgba32\"}"));
     }
 
     static string ResolveFeatureCatalogPath() {
