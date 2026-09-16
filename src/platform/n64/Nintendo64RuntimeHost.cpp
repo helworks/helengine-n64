@@ -88,13 +88,16 @@ bool Nintendo64RuntimeHost::Initialize() {
     const long drawableCount = objectManager == nullptr || objectManager->get_Drawables3D() == nullptr
         ? 0
         : static_cast<long>(objectManager->get_Drawables3D()->get_Count());
+    const long drawable2dCount = objectManager == nullptr || objectManager->get_Drawables2D() == nullptr
+        ? 0
+        : static_cast<long>(objectManager->get_Drawables2D()->get_Count());
     const long directionalLightCount = objectManager == nullptr || objectManager->get_DirectionalLights() == nullptr
         ? 0
         : static_cast<long>(objectManager->get_DirectionalLights()->get_Count());
     const long ambientLightCount = objectManager == nullptr || objectManager->get_AmbientLights() == nullptr
         ? 0
         : static_cast<long>(objectManager->get_AmbientLights()->get_Count());
-    debugf("n64:scene-ready cameras=%ld drawables3d=%ld directional=%ld ambient=%ld\n", cameraCount, drawableCount, directionalLightCount, ambientLightCount);
+    debugf("n64:scene-ready cameras=%ld drawables3d=%ld drawables2d=%ld directional=%ld ambient=%ld\n", cameraCount, drawableCount, drawable2dCount, directionalLightCount, ambientLightCount);
     if (cameraCount != 1 || drawableCount != 1) {
         debugf("n64:error authored-scene-cardinality\n");
         return false;
