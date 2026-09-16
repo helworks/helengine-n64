@@ -39,6 +39,9 @@ private:
     int32_t DrawCallCount = 0;
     /// True once the first sprite blit of the run has been traced, so `n64:first-sprite-draw` is emitted exactly once.
     bool HasLoggedSpriteDraw = false;
+    /// True once the first sprite skipped for a zero-area destination has been traced, so
+    /// `n64:first-sprite-skipped` is emitted exactly once instead of every frame the degenerate sprite is queued.
+    bool HasLoggedSkippedSprite = false;
 };
 
 } // namespace helengine::n64

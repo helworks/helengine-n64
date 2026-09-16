@@ -102,9 +102,18 @@ bool IsIdentityOrientation(const ::float4& orientation) {
         delete rawAsset;
         throw new InvalidOperationException("N64 cooked texture asset has the wrong type.");
     }
-    ::RuntimeTexture* runtimeTexture = BuildTextureFromRaw(textureAsset);
-    // The runtime texture copies every texel into its own surface, so the cooked payload is dead weight from
-    // here on.  Dispose frees the pixel array, which the defaulted asset destructor would otherwise leak.
+    // The runtime texture copies every texel into its own surface, so the cooked payload is dead weight once
+    // the build returns.  Dispose frees the pixel array, which the defaulted asset destructor would otherwise
+    // leak.  BuildTextureFromRaw throws on an unusable payload, so the release has to happen on that path too
+    // rather than only on the one that returns.
+    ::RuntimeTexture* runtimeTexture = nullptr;
+    try {
+        runtimeTexture = BuildTextureFromRaw(textureAsset);
+    } catch (...) {
+        textureAsset->Dispose();
+        delete textureAsset;
+        throw;
+    }
     textureAsset->Dispose();
     delete textureAsset;
     return runtimeTexture;
@@ -191,6 +200,12 @@ void Nintendo64RenderManager2D::DrawSprite(::ISpriteDrawable2D* sprite) {
     if (destinationWidth <= 0.0f || destinationHeight <= 0.0f) {
         // A degenerate destination covers no pixels.  Skipping it here is deliberate: rdpq treats a zero
         // scale factor as 1.0, so passing it through would draw the sprite at full size instead of nothing.
+        // Trace it once, because from an emulator log a silently skipped sprite is indistinguishable from a
+        // sprite that never reached the render queue at all.
+        if (!HasLoggedSkippedSprite) {
+            debugf("n64:first-sprite-skipped reason=empty-destination size=%ldx%ld\n", static_cast<long>(RoundToInt(destinationWidth)), static_cast<long>(RoundToInt(destinationHeight)));
+            HasLoggedSkippedSprite = true;
+        }
         return;
     }
     const float scaleX = destinationWidth / static_cast<float>(sourceWidth);
