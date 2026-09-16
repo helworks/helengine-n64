@@ -9,23 +9,9 @@ namespace helengine.n64.builder;
 /// </summary>
 public sealed class Nintendo64ContentStager {
     /// <summary>
-    /// Stages the manifest-declared cooked artifacts only.
-    /// </summary>
-    /// <param name="artifacts">Manifest-declared cooked artifacts.</param>
-    /// <param name="sourceRootPath">Package source root holding every cooked file.</param>
-    /// <param name="stagingRootPath">DragonFS input tree to rebuild.</param>
-    /// <param name="cancellationToken">Token observed between files.</param>
-    /// <returns>Runtime-relative paths staged, in staging order.</returns>
-    public IReadOnlyList<string> Stage(
-        IReadOnlyList<PlatformBuildArtifact> artifacts,
-        string sourceRootPath,
-        string stagingRootPath,
-        CancellationToken cancellationToken) {
-        return Stage(artifacts, [], sourceRootPath, stagingRootPath, cancellationToken);
-    }
-
-    /// <summary>
-    /// Stages the manifest-declared cooked artifacts together with the builder's own cook outputs.
+    /// Stages the manifest-declared cooked artifacts together with the builder's own cook outputs. There is
+    /// deliberately no artifacts-only overload: staging the manifest alone is exactly the bug that shipped a
+    /// ROM with no sprite textures, so every caller has to say what the builder cooked, even if that is empty.
     /// </summary>
     /// <param name="artifacts">Manifest-declared cooked artifacts.</param>
     /// <param name="builderCookedRelativePaths">Runtime-relative outputs this builder cooked from platform work items.</param>

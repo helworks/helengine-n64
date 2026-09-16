@@ -28,6 +28,7 @@
 #include "system/io/stream.hpp"
 
 #include "platform/n64/Nintendo64RuntimeTexture.hpp"
+#include "platform/n64/Nintendo64SpriteGeometry.hpp"
 
 namespace helengine::n64 {
 namespace {
@@ -49,24 +50,6 @@ constexpr float kOrientationEpsilon = 1e-4f;
         throw new InvalidOperationException("N64 content source returned a null stream.");
     }
     return ::AssetSerializer::Deserialize(stream);
-}
-
-/// Rounds one float to the nearest whole pixel or texel.  Sprite placement and sub-rects arrive as floats but
-/// the RDP addresses texels and screen pixels as integers, so every conversion goes through here.
-int32_t RoundToInt(float value) {
-    return static_cast<int32_t>(std::lround(value));
-}
-
-/// Clamps one integer into the inclusive range [minimum, maximum].  Used to keep a cooked source sub-rect
-/// inside the texture it addresses so the blitter never reads past the surface.
-int32_t ClampToRange(int32_t value, int32_t minimum, int32_t maximum) {
-    if (value < minimum) {
-        return minimum;
-    }
-    if (value > maximum) {
-        return maximum;
-    }
-    return value;
 }
 
 /// True when the entity orientation is the identity quaternion within `kOrientationEpsilon`.  The 2D pass
@@ -163,70 +146,61 @@ void Nintendo64RenderManager2D::DrawSprite(::ISpriteDrawable2D* sprite) {
         throw new NotSupportedException("N64 sprites do not support rotation.");
     }
 
-    const int32_t textureWidth = texture->get_Width();
-    const int32_t textureHeight = texture->get_Height();
-    if (textureWidth <= 0 || textureHeight <= 0) {
-        return;
-    }
-
-    // A source rect with a positive extent selects a normalized sub-rect of the texture; anything else means
-    // the sprite was authored without one and covers the whole texture.
+    // Every number the blit needs comes out of the host-tested geometry seam; this function only turns the
+    // authored component fields into scalars and turns the result into RDP calls.
     const ::float4 sourceRect = sprite->get_SourceRect();
-    int32_t sourceX = 0;
-    int32_t sourceY = 0;
-    int32_t sourceWidth = textureWidth;
-    int32_t sourceHeight = textureHeight;
-    if (sourceRect.Z > 0.0f && sourceRect.W > 0.0f) {
-        sourceX = RoundToInt(sourceRect.X * static_cast<float>(textureWidth));
-        sourceY = RoundToInt(sourceRect.Y * static_cast<float>(textureHeight));
-        sourceWidth = RoundToInt(sourceRect.Z * static_cast<float>(textureWidth));
-        sourceHeight = RoundToInt(sourceRect.W * static_cast<float>(textureHeight));
-    }
-    sourceX = ClampToRange(sourceX, 0, textureWidth);
-    sourceY = ClampToRange(sourceY, 0, textureHeight);
-    sourceWidth = ClampToRange(sourceWidth, 0, textureWidth - sourceX);
-    sourceHeight = ClampToRange(sourceHeight, 0, textureHeight - sourceY);
-    if (sourceWidth <= 0 || sourceHeight <= 0) {
+    const ::int2 authoredSize = sprite->get_Size();
+    const ::float3 scale = parent->get_Scale();
+    const Nintendo64SpriteBlitGeometry geometry = Nintendo64SpriteGeometry::Resolve(
+        texture->get_Width(),
+        texture->get_Height(),
+        sourceRect.X,
+        sourceRect.Y,
+        sourceRect.Z,
+        sourceRect.W,
+        authoredSize.X,
+        authoredSize.Y,
+        scale.X,
+        scale.Y);
+    if (geometry.Kind == Nintendo64SpriteGeometryKind::EmptySource) {
         return;
     }
-
-    // An authored size overrides the texel extent; a missing one means the sprite is drawn at texel size.
-    // Either way the parent scale multiplies it, and the blitter wants that as a ratio, not a pixel count.
-    const ::int2 authoredSize = sprite->get_Size();
-    const bool hasAuthoredSize = authoredSize.X > 0 && authoredSize.Y > 0;
-    const ::float3 scale = parent->get_Scale();
-    const float destinationWidth = static_cast<float>(hasAuthoredSize ? authoredSize.X : sourceWidth) * scale.X;
-    const float destinationHeight = static_cast<float>(hasAuthoredSize ? authoredSize.Y : sourceHeight) * scale.Y;
-    if (destinationWidth <= 0.0f || destinationHeight <= 0.0f) {
+    if (geometry.Kind == Nintendo64SpriteGeometryKind::EmptyDestination) {
         // A degenerate destination covers no pixels.  Skipping it here is deliberate: rdpq treats a zero
         // scale factor as 1.0, so passing it through would draw the sprite at full size instead of nothing.
         // Trace it once, because from an emulator log a silently skipped sprite is indistinguishable from a
         // sprite that never reached the render queue at all.
         if (!HasLoggedSkippedSprite) {
-            debugf("n64:first-sprite-skipped reason=empty-destination size=%ldx%ld\n", static_cast<long>(RoundToInt(destinationWidth)), static_cast<long>(RoundToInt(destinationHeight)));
+            debugf("n64:first-sprite-skipped reason=empty-destination size=%ldx%ld\n",
+                   static_cast<long>(Nintendo64SpriteGeometry::RoundToInt(geometry.DestinationWidth)),
+                   static_cast<long>(Nintendo64SpriteGeometry::RoundToInt(geometry.DestinationHeight)));
             HasLoggedSkippedSprite = true;
         }
         return;
     }
-    const float scaleX = destinationWidth / static_cast<float>(sourceWidth);
-    const float scaleY = destinationHeight / static_cast<float>(sourceHeight);
 
     const ::byte4 color = sprite->get_Color();
     rdpq_set_prim_color(RGBA32(color.X, color.Y, color.Z, color.W));
 
     const ::float3 position = parent->get_Position();
     rdpq_blitparms_t parms{};
-    parms.s0 = sourceX;
-    parms.t0 = sourceY;
-    parms.width = sourceWidth;
-    parms.height = sourceHeight;
-    parms.scale_x = scaleX;
-    parms.scale_y = scaleY;
-    rdpq_tex_blit(texture->Surface(), static_cast<float>(RoundToInt(position.X)), static_cast<float>(RoundToInt(position.Y)), &parms);
+    parms.s0 = geometry.SourceX;
+    parms.t0 = geometry.SourceY;
+    parms.width = geometry.SourceWidth;
+    parms.height = geometry.SourceHeight;
+    parms.scale_x = geometry.ScaleX;
+    parms.scale_y = geometry.ScaleY;
+    rdpq_tex_blit(texture->Surface(),
+                  static_cast<float>(Nintendo64SpriteGeometry::RoundToInt(position.X)),
+                  static_cast<float>(Nintendo64SpriteGeometry::RoundToInt(position.Y)),
+                  &parms);
 
     DrawCallCount++;
     if (!HasLoggedSpriteDraw) {
-        debugf("n64:first-sprite-draw size=%ldx%ld calls=%ld\n", static_cast<long>(RoundToInt(destinationWidth)), static_cast<long>(RoundToInt(destinationHeight)), static_cast<long>(DrawCallCount));
+        debugf("n64:first-sprite-draw size=%ldx%ld calls=%ld\n",
+               static_cast<long>(Nintendo64SpriteGeometry::RoundToInt(geometry.DestinationWidth)),
+               static_cast<long>(Nintendo64SpriteGeometry::RoundToInt(geometry.DestinationHeight)),
+               static_cast<long>(DrawCallCount));
         HasLoggedSpriteDraw = true;
     }
 }

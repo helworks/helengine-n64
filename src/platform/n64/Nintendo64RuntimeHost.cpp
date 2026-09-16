@@ -152,8 +152,9 @@ int Nintendo64RuntimeHost::Run() {
         // The screen-space 2D pass therefore runs here, after the Tiny3D pass has queued its triangles and
         // while the frame buffer is still attached, so the sprite blits land over the rendered 3D scene.
         EngineCore->Draw();
-        if (Render2D != nullptr) {
-            Render2D->Draw();
+        ::RenderManager2D* renderManager2D = EngineCore->get_RenderManager2D();
+        if (renderManager2D != nullptr) {
+            renderManager2D->Draw();
         }
         if (!Video.EndFrame()) {
             Shutdown();

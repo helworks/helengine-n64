@@ -4,6 +4,7 @@ using helengine.baseplatform.Profiles;
 using helengine.baseplatform.Reporting;
 using helengine.baseplatform.Requests;
 using helengine.baseplatform.Targets;
+using helengine.editor;
 using helengine.n64.builder;
 
 namespace helengine.n64.builder.tests;
@@ -63,6 +64,134 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
         Assert.True(report.Succeeded, string.Join(Environment.NewLine, report.Diagnostics.Select(diagnostic => diagnostic.Message)));
         Assert.NotNull(nativeBuildExecutor.StagedFilesystemRootPath);
         Assert.Equal("scene", File.ReadAllText(Path.Combine(nativeBuildExecutor.StagedFilesystemRootPath!, "cooked", "scenes", "cube_test.hasset")));
+    }
+
+    /// <summary>
+    /// The editor keeps builder-owned cook outputs out of the manifest's cooked artifacts, so the builder has
+    /// to carry them into staging itself. Staging only the manifest is what shipped a ROM whose sprite
+    /// textures were missing from its filesystem, and the stager's own tests cannot catch that because they
+    /// are handed the builder-cooked list directly.
+    /// </summary>
+    [Fact]
+    public async Task BuildAsync_StagesTheTexturesItCookedEvenThoughTheManifestOmitsThem() {
+        string root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-n64\\v02\\tests", Guid.NewGuid().ToString("N"));
+        string workingRoot = Path.Combine(root, "builder");
+        string packageSourceRoot = Path.Combine(workingRoot, "package-source");
+        string outputRoot = Path.Combine(root, "output");
+        string generatedCoreRoot = Path.Combine(root, "generated-core");
+        string cookedScenePath = Path.Combine(packageSourceRoot, "cooked", "scenes", "cube_test.hasset");
+        Directory.CreateDirectory(Path.GetDirectoryName(cookedScenePath)!);
+        File.WriteAllText(cookedScenePath, "scene");
+        string sourceIconPath = Path.Combine(root, "icon.png");
+        Directory.CreateDirectory(root);
+        WriteSourcePng(sourceIconPath, 8, 8);
+
+        const string cookedIconRelativePath = "cooked/imported/icon";
+        PlatformCookWorkItem textureWorkItem = new(
+            "n64:texture:" + cookedIconRelativePath,
+            sourceIconPath,
+            "texture",
+            "n64",
+            "runtime-texture",
+            cookedIconRelativePath,
+            "runtime-texture:" + cookedIconRelativePath,
+            "source-hash",
+            "settings-hash",
+            Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
+                MaxResolution = 64,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            }),
+            []);
+        // The manifest declares only the scene, exactly as the editor emits it: the cooked icon is absent.
+        PlatformBuildRequest request = CreateRequest(
+            [new PlatformBuildArtifact("cooked/scenes/cube_test.hasset", "cube_test", "sha", "scene", "n64")],
+            [textureWorkItem],
+            outputRoot,
+            workingRoot,
+            generatedCoreRoot);
+        RecordingNativeBuildExecutor nativeBuildExecutor = new();
+
+        PlatformBuildReport report = await new Nintendo64PlatformAssetBuilder(nativeBuildExecutor).BuildAsync(
+            request,
+            new NoOpProgressReporter(),
+            new NoOpDiagnosticReporter(),
+            CancellationToken.None);
+
+        Assert.True(report.Succeeded, string.Join(Environment.NewLine, report.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        string stagedIconPath = Path.Combine(nativeBuildExecutor.StagedFilesystemRootPath!, "cooked", "imported", "icon");
+        Assert.True(File.Exists(stagedIconPath), $"The cooked texture never reached the staging tree at '{stagedIconPath}'.");
+        helengine.TextureAsset staged = Assert.IsType<helengine.TextureAsset>(
+            helengine.files.AssetSerializer.DeserializeFromBytes(File.ReadAllBytes(stagedIconPath)));
+        Assert.Equal(8, staged.Width);
+        Assert.Equal(8, staged.Height);
+        Assert.Equal("runtime-texture:" + cookedIconRelativePath, staged.Id);
+        Assert.True(File.Exists(Path.Combine(nativeBuildExecutor.StagedFilesystemRootPath!, "cooked", "scenes", "cube_test.hasset")));
+    }
+
+    /// <summary>
+    /// Builds one N64 build request around the supplied cooked artifacts and builder-owned cook work items.
+    /// </summary>
+    /// <param name="cookedArtifacts">Manifest-declared cooked artifacts.</param>
+    /// <param name="platformCookWorkItems">Builder-owned platform cook work items.</param>
+    /// <param name="outputRoot">Absolute build output root.</param>
+    /// <param name="workingRoot">Absolute builder working root.</param>
+    /// <param name="generatedCoreRoot">Absolute generated Core root.</param>
+    /// <returns>Platform build request.</returns>
+    static PlatformBuildRequest CreateRequest(
+        PlatformBuildArtifact[] cookedArtifacts,
+        PlatformCookWorkItem[] platformCookWorkItems,
+        string outputRoot,
+        string workingRoot,
+        string generatedCoreRoot) {
+        PlatformBuildManifest manifest = new(
+            1,
+            "project",
+            "1.0.0",
+            "1.0.0",
+            "n64",
+            "1.0.0",
+            "cube_test",
+            [new PlatformBuildScene("cube_test", "Cube Test", "scenes/cube_test.helen", [], [])],
+            [],
+            cookedArtifacts,
+            [],
+            [],
+            new PlatformContainerWritePlan("n64", []),
+            platformCookWorkItems,
+            PlatformBuildRuntimeFeatureManifest.Empty);
+        return new PlatformBuildRequest(
+            manifest,
+            [new PlatformBuildTargetVariant("release", "n64", "n64", "release")],
+            [new PlatformCookProfile("release", "release", new PlatformCookProfileCapabilities("n64", "n64-standard", "pcm-buffered", "n64-scene-v1", PlatformSerializationEndianness.LittleEndian))],
+            outputRoot,
+            workingRoot,
+            "release",
+            "n64-standard",
+            "release",
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>(),
+            generatedCoreRoot,
+            "release",
+            "dragonfs",
+            "release");
+    }
+
+    /// <summary>
+    /// Writes one opaque test PNG the builder-owned texture cook can decode.
+    /// </summary>
+    /// <param name="path">Absolute destination path.</param>
+    /// <param name="width">Source width in pixels.</param>
+    /// <param name="height">Source height in pixels.</param>
+    static void WriteSourcePng(string path, int width, int height) {
+        using System.Drawing.Bitmap bitmap = new(width, height);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                bitmap.SetPixel(x, y, System.Drawing.Color.FromArgb(255, 10, 20, 30));
+            }
+        }
+        bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
     }
 
     sealed class RecordingNativeBuildExecutor : INintendo64NativeBuildExecutor {

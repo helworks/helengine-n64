@@ -13,12 +13,12 @@ public sealed class Nintendo64ContentStagerTests {
         File.WriteAllText(Path.Combine(sourceRoot, "scene.heasset"), "scene");
         PlatformBuildArtifact artifact = new("scene.heasset", "scene", "sha", "scene", "n64");
 
-        IReadOnlyList<string> staged = new Nintendo64ContentStager().Stage([artifact], sourceRoot, stagingRoot, CancellationToken.None);
+        IReadOnlyList<string> staged = new Nintendo64ContentStager().Stage([artifact], [], sourceRoot, stagingRoot, CancellationToken.None);
 
         Assert.Single(staged);
         Assert.Equal("scene", File.ReadAllText(Path.Combine(stagingRoot, "scene.heasset")));
         PlatformBuildArtifact escaping = new("../outside.heasset", "outside", "sha", "scene", "n64");
-        Assert.Throws<InvalidOperationException>(() => new Nintendo64ContentStager().Stage([escaping], sourceRoot, stagingRoot, CancellationToken.None));
+        Assert.Throws<InvalidOperationException>(() => new Nintendo64ContentStager().Stage([escaping], [], sourceRoot, stagingRoot, CancellationToken.None));
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public sealed class Nintendo64ContentStagerTests {
         File.WriteAllText(Path.Combine(sourceRoot, "Assets", "Cube.heasset"), "a");
         File.WriteAllText(Path.Combine(sourceRoot, "assets", "cube.heasset"), "b");
 
-        Assert.Throws<InvalidOperationException>(() => new Nintendo64ContentStager().Stage([first, second], sourceRoot, stagingRoot, CancellationToken.None));
+        Assert.Throws<InvalidOperationException>(() => new Nintendo64ContentStager().Stage([first, second], [], sourceRoot, stagingRoot, CancellationToken.None));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class Nintendo64ContentStagerTests {
         File.WriteAllText(Path.Combine(stagingRoot, "deleted.heasset"), "old");
         PlatformBuildArtifact artifact = new("new.heasset", "new", "sha", "scene", "n64");
 
-        new Nintendo64ContentStager().Stage([artifact], sourceRoot, stagingRoot, CancellationToken.None);
+        new Nintendo64ContentStager().Stage([artifact], [], sourceRoot, stagingRoot, CancellationToken.None);
 
         Assert.True(File.Exists(Path.Combine(stagingRoot, "new.heasset")));
         Assert.False(File.Exists(Path.Combine(stagingRoot, "deleted.heasset")));
