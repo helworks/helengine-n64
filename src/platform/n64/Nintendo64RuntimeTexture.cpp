@@ -35,8 +35,9 @@ bool Nintendo64RuntimeTexture::Initialize(const ::TextureAsset* asset) {
     }
 
     // Release any surface a previous call left behind only once the asset is known good, so a
-    // rejected asset cannot destroy a texture that is already usable.
-    Dispose();
+    // rejected asset cannot destroy a texture that is already usable.  This deliberately does not
+    // go through Dispose, which would mark a texture we are about to bring to life as disposed.
+    ReleaseSurface();
 
     SurfaceValue = surface_alloc(FMT_RGBA16, static_cast<uint16_t>(width), static_cast<uint16_t>(height));
     if (SurfaceValue.buffer == nullptr) {
@@ -53,11 +54,10 @@ bool Nintendo64RuntimeTexture::Initialize(const ::TextureAsset* asset) {
     Width = width;
     Height = height;
     IsEngineOwned = false;
-    IsDisposed = false; // the Dispose call above marked the base disposed; this texture is live again
     return true;
 }
 
-void Nintendo64RuntimeTexture::Dispose() {
+void Nintendo64RuntimeTexture::ReleaseSurface() {
     if (SurfaceInitialized) {
         surface_free(&SurfaceValue);
         SurfaceValue = surface_t{};
@@ -65,6 +65,10 @@ void Nintendo64RuntimeTexture::Dispose() {
     }
     Width = 0;
     Height = 0;
+}
+
+void Nintendo64RuntimeTexture::Dispose() {
+    ReleaseSurface();
     ::RuntimeTexture::Dispose();
 }
 
