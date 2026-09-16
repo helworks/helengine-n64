@@ -23,7 +23,15 @@ public sealed class Nintendo64TextureCooker {
         if (sourceTexture.ColorFormat != TextureAssetColorFormat.Rgba32) {
             throw new InvalidOperationException($"N64 texture cook requires an Rgba32 source texture; received '{sourceTexture.ColorFormat}'.");
         }
-        int expectedSourceByteLength = sourceTexture.Width * sourceTexture.Height * 4;
+        // The cook only ever emits Rgba32, so a settings payload asking for anything else was silently getting
+        // Rgba32 back. Reject it loudly instead of pretending the request was honoured.
+        if (settings.ColorFormat != TextureAssetColorFormat.Rgba32) {
+            throw new InvalidOperationException($"N64 texture cook only emits Rgba32; the requested cook settings color format '{settings.ColorFormat}' is not supported.");
+        }
+        // Width and Height are 16-bit, so the product of the two and four bytes per pixel leaves the 32-bit
+        // range above roughly 23170 pixels per side and would wrap into a bogus expected length. Widen the
+        // arithmetic so an oversized source fails the length check rather than passing a wrapped one.
+        long expectedSourceByteLength = (long)sourceTexture.Width * sourceTexture.Height * 4L;
         if (sourceTexture.Colors == null || sourceTexture.Colors.Length != expectedSourceByteLength) {
             throw new InvalidOperationException("N64 texture cook requires source pixel bytes whose length matches Width * Height * 4.");
         }

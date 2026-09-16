@@ -76,6 +76,27 @@ void TestOutOfBoundsSourceRectClampsInsideTheTexture() {
           "an off-texture origin clamps to the edge with no width");
 }
 
+/// A sub-rect that starts off the left or top edge must lose the off-texture band, not slide back inside.
+void TestNegativeSourceRectOriginCropsRatherThanShifts() {
+    // -0.25 * 64 is eight texels off the left and top edge; 0.5 * 64 asks for 32 texels in each direction.
+    // Cropping leaves the 24 texels that are actually on the texture, starting at the origin.  Shifting would
+    // have kept all 32 and read texels 0..31, which is a different part of the image than the author picked.
+    const Nintendo64SpriteBlitGeometry geometry =
+        Nintendo64SpriteGeometry::Resolve(64, 64, -0.125f, -0.125f, 0.5f, 0.5f, 0, 0, 1.0f, 1.0f);
+
+    Check(geometry.Kind == Nintendo64SpriteGeometryKind::Drawable, "a cropped sprite is still drawable");
+    Check(geometry.SourceX == 0 && geometry.SourceY == 0, "a negative origin clamps to the texture origin");
+    Check(geometry.SourceWidth == 24, "the width loses the eight texels that were off the left edge");
+    Check(geometry.SourceHeight == 24, "the height loses the eight texels that were off the top edge");
+
+    // A sub-rect entirely off the left edge has nothing left once it is cropped.
+    const Nintendo64SpriteBlitGeometry offTexture =
+        Nintendo64SpriteGeometry::Resolve(64, 64, -1.5f, 0.0f, 0.5f, 0.5f, 16, 16, 1.0f, 1.0f);
+    Check(offTexture.Kind == Nintendo64SpriteGeometryKind::EmptySource,
+          "a source rect entirely off the left edge reports an empty source");
+    Check(offTexture.SourceWidth == 0, "cropping a fully off-texture rect leaves no width");
+}
+
 /// The authored size overrides the texel extent on both axes, or is ignored on both when either axis is unset.
 void TestAuthoredSizeOverridesTheSourceExtent() {
     const Nintendo64SpriteBlitGeometry authored =
@@ -154,6 +175,7 @@ int main() {
     TestNormalizedSourceRectResolvesToTexels();
     TestMissingSourceRectCoversTheWholeTexture();
     TestOutOfBoundsSourceRectClampsInsideTheTexture();
+    TestNegativeSourceRectOriginCropsRatherThanShifts();
     TestAuthoredSizeOverridesTheSourceExtent();
     TestParentScaleMultipliesTheDestination();
     TestZeroDestinationReportsEmptyDestination();

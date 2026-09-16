@@ -90,7 +90,18 @@ uint32_t Nintendo64RenderManager3D::PackColor(const ::PlatformMaterialAsset* mat
         delete rawAsset;
         throw new InvalidOperationException("N64 cooked material asset has the wrong type.");
     }
-    ::RuntimeMaterial* runtimeMaterial = BuildMaterialAsset(material);
+    // The runtime material copies every field it needs out of the cooked asset, so the asset is dead weight
+    // once the build returns.  BuildMaterialAsset throws on a textured or foreign-family material, so the
+    // release has to happen on that path too rather than only on the one that returns.  This mirrors
+    // BuildTextureFromCooked in the 2D path; unlike TextureAsset, the generated PlatformMaterialAsset
+    // declares no Dispose, so deleting it is the whole release and the two paths stay symmetric by shape.
+    ::RuntimeMaterial* runtimeMaterial = nullptr;
+    try {
+        runtimeMaterial = BuildMaterialAsset(material);
+    } catch (...) {
+        delete material;
+        throw;
+    }
     delete material;
     return runtimeMaterial;
 }

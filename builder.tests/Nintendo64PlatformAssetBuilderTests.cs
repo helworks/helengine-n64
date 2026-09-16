@@ -83,30 +83,21 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
         Directory.CreateDirectory(Path.GetDirectoryName(cookedScenePath)!);
         File.WriteAllText(cookedScenePath, "scene");
         string sourceIconPath = Path.Combine(root, "icon.png");
+        string sourceBadgePath = Path.Combine(root, "badge.png");
         Directory.CreateDirectory(root);
         WriteSourcePng(sourceIconPath, 8, 8);
+        WriteSourcePng(sourceBadgePath, 4, 4);
 
+        // Two work items, not one: with a single item a staging loop that only ever carried work item zero
+        // would still pass, which is the bug this test exists to catch.
         const string cookedIconRelativePath = "cooked/imported/icon";
-        PlatformCookWorkItem textureWorkItem = new(
-            "n64:texture:" + cookedIconRelativePath,
-            sourceIconPath,
-            "texture",
-            "n64",
-            "runtime-texture",
-            cookedIconRelativePath,
-            "runtime-texture:" + cookedIconRelativePath,
-            "source-hash",
-            "settings-hash",
-            Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
-                MaxResolution = 64,
-                ColorFormat = TextureAssetColorFormat.Rgba32,
-                AlphaPrecision = TextureAssetAlphaPrecision.A8
-            }),
-            []);
-        // The manifest declares only the scene, exactly as the editor emits it: the cooked icon is absent.
+        const string cookedBadgeRelativePath = "cooked/imported/nested/badge";
+        PlatformCookWorkItem iconWorkItem = CreateTextureWorkItem(sourceIconPath, cookedIconRelativePath);
+        PlatformCookWorkItem badgeWorkItem = CreateTextureWorkItem(sourceBadgePath, cookedBadgeRelativePath);
+        // The manifest declares only the scene, exactly as the editor emits it: the cooked icons are absent.
         PlatformBuildRequest request = CreateRequest(
             [new PlatformBuildArtifact("cooked/scenes/cube_test.hasset", "cube_test", "sha", "scene", "n64")],
-            [textureWorkItem],
+            [iconWorkItem, badgeWorkItem],
             outputRoot,
             workingRoot,
             generatedCoreRoot);
@@ -121,12 +112,46 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
         Assert.True(report.Succeeded, string.Join(Environment.NewLine, report.Diagnostics.Select(diagnostic => diagnostic.Message)));
         string stagedIconPath = Path.Combine(nativeBuildExecutor.StagedFilesystemRootPath!, "cooked", "imported", "icon");
         Assert.True(File.Exists(stagedIconPath), $"The cooked texture never reached the staging tree at '{stagedIconPath}'.");
-        helengine.TextureAsset staged = Assert.IsType<helengine.TextureAsset>(
+        helengine.TextureAsset stagedIcon = Assert.IsType<helengine.TextureAsset>(
             helengine.files.AssetSerializer.DeserializeFromBytes(File.ReadAllBytes(stagedIconPath)));
-        Assert.Equal(8, staged.Width);
-        Assert.Equal(8, staged.Height);
-        Assert.Equal("runtime-texture:" + cookedIconRelativePath, staged.Id);
+        Assert.Equal(8, stagedIcon.Width);
+        Assert.Equal(8, stagedIcon.Height);
+        Assert.Equal("runtime-texture:" + cookedIconRelativePath, stagedIcon.Id);
+
+        string stagedBadgePath = Path.Combine(nativeBuildExecutor.StagedFilesystemRootPath!, "cooked", "imported", "nested", "badge");
+        Assert.True(File.Exists(stagedBadgePath), $"The second cooked texture never reached the staging tree at '{stagedBadgePath}'.");
+        helengine.TextureAsset stagedBadge = Assert.IsType<helengine.TextureAsset>(
+            helengine.files.AssetSerializer.DeserializeFromBytes(File.ReadAllBytes(stagedBadgePath)));
+        Assert.Equal(4, stagedBadge.Width);
+        Assert.Equal(4, stagedBadge.Height);
+        Assert.Equal("runtime-texture:" + cookedBadgeRelativePath, stagedBadge.Id);
+
         Assert.True(File.Exists(Path.Combine(nativeBuildExecutor.StagedFilesystemRootPath!, "cooked", "scenes", "cube_test.hasset")));
+    }
+
+    /// <summary>
+    /// Builds one builder-owned N64 texture cook work item for the supplied source image and cooked output path.
+    /// </summary>
+    /// <param name="sourcePath">Absolute path of the source image to cook.</param>
+    /// <param name="cookedRelativePath">Content-relative path the cooked texture is written to.</param>
+    /// <returns>Platform cook work item the N64 builder can execute.</returns>
+    static PlatformCookWorkItem CreateTextureWorkItem(string sourcePath, string cookedRelativePath) {
+        return new PlatformCookWorkItem(
+            "n64:texture:" + cookedRelativePath,
+            sourcePath,
+            "texture",
+            "n64",
+            "runtime-texture",
+            cookedRelativePath,
+            "runtime-texture:" + cookedRelativePath,
+            "source-hash",
+            "settings-hash",
+            Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
+                MaxResolution = 64,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            }),
+            []);
     }
 
     /// <summary>

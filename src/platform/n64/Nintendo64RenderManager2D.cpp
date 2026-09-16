@@ -143,6 +143,10 @@ void Nintendo64RenderManager2D::DrawSprite(::ISpriteDrawable2D* sprite) {
     }
     ::Entity* parent = sprite->get_Parent();
     if (!IsIdentityOrientation(parent->get_Orientation())) {
+        // This throw fires from inside the frame loop, where an unhandled native exception stops the ROM dead
+        // with nothing on the debug channel to say why.  Every other hard failure on this platform prints an
+        // "n64:error <reason>" line first, so emit one here too before the ROM goes down.
+        debugf("n64:error sprite-rotation\n");
         throw new NotSupportedException("N64 sprites do not support rotation.");
     }
 

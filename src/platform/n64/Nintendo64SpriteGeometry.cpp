@@ -50,8 +50,16 @@ Nintendo64SpriteBlitGeometry Nintendo64SpriteGeometry::Resolve(
         sourceWidth = RoundToInt(sourceRectWidth * static_cast<float>(textureWidth));
         sourceHeight = RoundToInt(sourceRectHeight * static_cast<float>(textureHeight));
     }
-    sourceX = ClampToRange(sourceX, 0, textureWidth);
-    sourceY = ClampToRange(sourceY, 0, textureHeight);
+    // A sub-rect that starts off the left or top edge has to be cropped, not slid back inside the texture.
+    // Clamping the origin on its own would move the whole window right and down and sample texels the author
+    // never selected, so the extent gives up exactly what the origin gained.  The same subtraction handles an
+    // origin past the far edge: the extent grows, and the bounds clamp below cuts it back to nothing.
+    const int32_t clampedSourceX = ClampToRange(sourceX, 0, textureWidth);
+    const int32_t clampedSourceY = ClampToRange(sourceY, 0, textureHeight);
+    sourceWidth -= clampedSourceX - sourceX;
+    sourceHeight -= clampedSourceY - sourceY;
+    sourceX = clampedSourceX;
+    sourceY = clampedSourceY;
     sourceWidth = ClampToRange(sourceWidth, 0, textureWidth - sourceX);
     sourceHeight = ClampToRange(sourceHeight, 0, textureHeight - sourceY);
 

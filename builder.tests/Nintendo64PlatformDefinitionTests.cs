@@ -189,8 +189,12 @@ public sealed class Nintendo64PlatformDefinitionTests {
 
     [Fact]
     public void TextureCookSettings_RejectUnsupportedColorFormat() {
+        // "Bogus" is not an enum member at all, so it fails the parse and never reaches the supported-format
+        // check. "Rgba4444" parses cleanly, which is what actually exercises the N64-only-emits-Rgba32 branch.
         Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
             "{\"maxResolution\":64,\"colorFormat\":\"Bogus\",\"alphaPrecision\":\"A8\"}"));
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"maxResolution\":64,\"colorFormat\":\"Rgba4444\",\"alphaPrecision\":\"A8\"}"));
     }
 
     [Fact]

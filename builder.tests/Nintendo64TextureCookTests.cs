@@ -114,6 +114,27 @@ public sealed class Nintendo64TextureCookTests {
     }
 
     /// <summary>
+    /// Ensures a cook settings color format the cook cannot emit fails loudly. The cook always writes Rgba32,
+    /// so accepting a different requested format would silently hand back something other than what was asked
+    /// for, and the settings parameter would be decorative.
+    /// </summary>
+    [Fact]
+    public void Cook_ThrowsWhenSettingsRequestAColorFormatItCannotEmit() {
+        string sourcePath = WriteSourcePng(16, 16);
+        try {
+            TextureAsset decoded = new Nintendo64SourceTextureDecoder().Decode(sourcePath);
+            InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() => new Nintendo64TextureCooker().Cook(decoded, new TextureAssetProcessorSettings {
+                MaxResolution = 64,
+                ColorFormat = TextureAssetColorFormat.Rgba4444,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            }));
+            Assert.Contains("Rgba4444", failure.Message, StringComparison.Ordinal);
+        } finally {
+            File.Delete(sourcePath);
+        }
+    }
+
+    /// <summary>
     /// Ensures box filtering averages real pixel values and preserves aspect ratio on a non-square source.
     /// </summary>
     [Fact]
