@@ -63,9 +63,13 @@ public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
             string packageSourceRoot = ResolvePackageSourceRoot(request.WorkingRoot);
 
             PlatformCookWorkItem[] cookWorkItems = request.Manifest.PlatformCookWorkItems ?? [];
+            // The editor leaves builder-owned outputs out of the manifest's cooked artifacts, so collect them here:
+            // they still have to reach the DragonFS tree or the runtime cannot open its sprite textures.
+            List<string> builderCookedRelativePaths = new(cookWorkItems.Length);
             for (int workItemIndex = 0; workItemIndex < cookWorkItems.Length; workItemIndex++) {
                 cancellationToken.ThrowIfCancellationRequested();
                 CookWorkItemExecutor.Execute(cookWorkItems[workItemIndex], packageSourceRoot);
+                builderCookedRelativePaths.Add(cookWorkItems[workItemIndex].OutputRelativePath);
                 progressReporter.Report(new PlatformBuildProgressUpdate(
                     "Cook Platform Artifacts",
                     cookWorkItems[workItemIndex].OutputLogicalArtifactId,
@@ -75,7 +79,7 @@ public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
             }
 
             progressReporter.Report(new PlatformBuildProgressUpdate("Stage DragonFS", "manifest", 0, 1, "Staging declared N64 cooked artifacts."));
-            new Nintendo64ContentStager().Stage(request.Manifest.CookedArtifacts, packageSourceRoot, stagingRoot, cancellationToken);
+            new Nintendo64ContentStager().Stage(request.Manifest.CookedArtifacts, builderCookedRelativePaths, packageSourceRoot, stagingRoot, cancellationToken);
             new Nintendo64StartupManifestWriter().Write(request.GeneratedCoreCppRootPath, request.Manifest);
             progressReporter.Report(new PlatformBuildProgressUpdate("Build Native ROM", "helengine_n64.z64", 0, 1, "Building authored N64 runtime."));
             NativeBuildExecutor.Build(request.GeneratedCoreCppRootPath, stagingRoot, request.OutputRoot, cancellationToken);

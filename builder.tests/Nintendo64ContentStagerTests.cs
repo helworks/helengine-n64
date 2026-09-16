@@ -40,6 +40,44 @@ public sealed class Nintendo64ContentStagerTests {
     }
 
     [Fact]
+    public void Stage_CopiesBuilderCookedOutputsThatTheManifestOmits() {
+        string root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-n64\\v02\\tests", Guid.NewGuid().ToString("N"));
+        string sourceRoot = Path.Combine(root, "source");
+        string stagingRoot = Path.Combine(root, "staged");
+        Directory.CreateDirectory(Path.Combine(sourceRoot, "cooked", "imported"));
+        File.WriteAllText(Path.Combine(sourceRoot, "cooked", "scene.heasset"), "scene");
+        File.WriteAllText(Path.Combine(sourceRoot, "cooked", "imported", "icon"), "icon");
+        PlatformBuildArtifact artifact = new("cooked/scene.heasset", "scene", "sha", "scene", "n64");
+
+        IReadOnlyList<string> staged = new Nintendo64ContentStager().Stage(
+            [artifact],
+            ["cooked/imported/icon"],
+            sourceRoot,
+            stagingRoot,
+            CancellationToken.None);
+
+        Assert.Equal(2, staged.Count);
+        Assert.Equal("icon", File.ReadAllText(Path.Combine(stagingRoot, "cooked", "imported", "icon")));
+    }
+
+    [Fact]
+    public void Stage_RejectsBuilderCookedOutputThatCollidesWithADeclaredArtifact() {
+        string root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-n64\\v02\\tests", Guid.NewGuid().ToString("N"));
+        string sourceRoot = Path.Combine(root, "source");
+        string stagingRoot = Path.Combine(root, "staged");
+        Directory.CreateDirectory(Path.Combine(sourceRoot, "cooked"));
+        File.WriteAllText(Path.Combine(sourceRoot, "cooked", "scene.heasset"), "scene");
+        PlatformBuildArtifact artifact = new("cooked/scene.heasset", "scene", "sha", "scene", "n64");
+
+        Assert.Throws<InvalidOperationException>(() => new Nintendo64ContentStager().Stage(
+            [artifact],
+            ["cooked/scene.heasset"],
+            sourceRoot,
+            stagingRoot,
+            CancellationToken.None));
+    }
+
+    [Fact]
     public void Stage_RemovesFilesFromPreviousManifest() {
         string root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-n64\\v02\\tests", Guid.NewGuid().ToString("N"));
         string sourceRoot = Path.Combine(root, "source");
