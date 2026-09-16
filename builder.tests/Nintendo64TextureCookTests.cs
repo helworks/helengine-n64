@@ -160,12 +160,16 @@ public sealed class Nintendo64TextureCookTests {
     }
 
     /// <summary>
-    /// Ensures a serialized engine texture asset source, such as the editor's generated platform font atlas,
-    /// is decoded through the asset serializer instead of the system image decoder.
+    /// Ensures a serialized engine texture asset source is decoded through the asset serializer instead of the
+    /// system image decoder, whichever extension the editor gave it: the cached platform font atlas arrives as
+    /// <c>.hetex</c> and the externalized editor default font atlas as <c>.hasset</c>.
     /// </summary>
-    [Fact]
-    public void Decode_ReadsGeneratedEngineTextureAssetSource() {
-        string sourcePath = WriteSourceEngineTexture(128, 96);
+    /// <param name="sourceExtension">Extension the editor gave the generated source asset.</param>
+    [Theory]
+    [InlineData(".hetex")]
+    [InlineData(".hasset")]
+    public void Decode_ReadsGeneratedEngineTextureAssetSource(string sourceExtension) {
+        string sourcePath = WriteSourceEngineTexture(128, 96, sourceExtension);
         try {
             TextureAsset decoded = new Nintendo64SourceTextureDecoder().Decode(sourcePath);
 
@@ -192,9 +196,10 @@ public sealed class Nintendo64TextureCookTests {
     /// </summary>
     /// <param name="width">Source width in pixels.</param>
     /// <param name="height">Source height in pixels.</param>
+    /// <param name="sourceExtension">Extension the editor gave the generated source asset.</param>
     /// <returns>Absolute path of the written engine texture asset.</returns>
-    static string WriteSourceEngineTexture(int width, int height) {
-        string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".hetex");
+    static string WriteSourceEngineTexture(int width, int height, string sourceExtension) {
+        string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + sourceExtension);
         byte[] colors = new byte[width * height * 4];
         for (int offset = 0; offset < colors.Length; offset += 4) {
             colors[offset] = 40;

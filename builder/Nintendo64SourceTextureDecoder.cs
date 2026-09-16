@@ -4,14 +4,15 @@ namespace helengine.n64.builder;
 
 /// <summary>
 /// Decodes one cook work item source into an uncooked straight-RGBA texture asset for the N64 cook. Work item
-/// sources are either authored image files or engine texture assets that the editor generated for the platform,
-/// such as the cached font atlases written next to each platform font variant.
+/// sources are either authored image files or serialized engine texture assets that the editor generated for the
+/// platform, such as the cached platform font atlases and the externalized editor default font atlas.
 /// </summary>
 public sealed class Nintendo64SourceTextureDecoder {
     /// <summary>
-    /// Extension used by serialized engine texture assets that the editor hands to builder-owned cooks.
+    /// Magic bytes that begin every serialized engine binary asset. Generated texture sources reach the cook under
+    /// several extensions, so the payload itself decides which decoder runs.
     /// </summary>
-    const string EngineTextureAssetExtension = ".hetex";
+    static readonly byte[] EngineAssetMagicBytes = [(byte)'H', (byte)'E', (byte)'L', (byte)'E'];
 
     /// <summary>
     /// Decodes one source texture into a raw RGBA texture asset.
@@ -26,11 +27,26 @@ public sealed class Nintendo64SourceTextureDecoder {
             throw new FileNotFoundException("Source texture file was not found.", sourceAssetPath);
         }
 
-        if (string.Equals(Path.GetExtension(sourceAssetPath), EngineTextureAssetExtension, StringComparison.OrdinalIgnoreCase)) {
+        if (HasEngineAssetMagic(sourceAssetPath)) {
             return DecodeEngineTextureAsset(sourceAssetPath);
         }
 
         return DecodeImageFile(sourceAssetPath);
+    }
+
+    /// <summary>
+    /// Determines whether one source file begins with the engine binary asset magic bytes.
+    /// </summary>
+    /// <param name="sourceAssetPath">Absolute source path to inspect.</param>
+    /// <returns><c>true</c> when the file is a serialized engine asset.</returns>
+    static bool HasEngineAssetMagic(string sourceAssetPath) {
+        byte[] magicBuffer = new byte[EngineAssetMagicBytes.Length];
+        using FileStream stream = new(sourceAssetPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (stream.ReadAtLeast(magicBuffer, magicBuffer.Length, false) != magicBuffer.Length) {
+            return false;
+        }
+
+        return magicBuffer.AsSpan().SequenceEqual(EngineAssetMagicBytes);
     }
 
     /// <summary>
