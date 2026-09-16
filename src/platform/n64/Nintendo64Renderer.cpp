@@ -89,7 +89,7 @@ void Nintendo64Renderer::SetAuthoredCamera(const T3DMat4& viewMatrix, float fiel
     t3d_viewport_set_view_matrix(&Viewport, &viewMatrix);
 }
 
-void Nintendo64Renderer::DrawAuthoredMesh(const T3DVertPacked* vertices, uint32_t vertexCount, const uint16_t* indices, uint32_t indexCount, const T3DMat4& modelMatrix, uint32_t color, bool doubleSided) {
+void Nintendo64Renderer::DrawAuthoredMesh(const T3DVertPacked* vertices, uint32_t vertexCount, const uint16_t* indices, uint32_t indexCount, const T3DMat4& modelMatrix, bool doubleSided, bool lit, const Nintendo64FrameLights& lights) {
     if (!Initialized || !Authored || vertices == nullptr || indices == nullptr || vertexCount == 0 || indexCount == 0 || ModelMatrix == nullptr) {
         return;
     }
@@ -99,8 +99,20 @@ void Nintendo64Renderer::DrawAuthoredMesh(const T3DVertPacked* vertices, uint32_
     rdpq_mode_zbuf(true, true);
     rdpq_mode_blender(0);
     rdpq_mode_fog(0);
-    t3d_light_set_count(0);
-    t3d_state_set_drawflags(static_cast<T3DDrawFlags>(T3D_FLAG_SHADED | T3D_FLAG_DEPTH | T3D_FLAG_NO_LIGHT | (doubleSided ? 0 : T3D_FLAG_CULL_BACK)));
+
+    uint32_t drawFlags = T3D_FLAG_SHADED | T3D_FLAG_DEPTH | (doubleSided ? 0u : static_cast<uint32_t>(T3D_FLAG_CULL_BACK));
+    if (lit) {
+        t3d_light_set_ambient(lights.Ambient);
+        for (int index = 0; index < lights.DirectionalCount; index++) {
+            const T3DVec3 direction = {{lights.Directional[index].Direction[0], lights.Directional[index].Direction[1], lights.Directional[index].Direction[2]}};
+            t3d_light_set_directional(index, lights.Directional[index].Color, &direction);
+        }
+        t3d_light_set_count(lights.DirectionalCount);
+    } else {
+        t3d_light_set_count(0);
+        drawFlags |= T3D_FLAG_NO_LIGHT;
+    }
+    t3d_state_set_drawflags(static_cast<T3DDrawFlags>(drawFlags));
 
     t3d_mat4_to_fixed(ModelMatrix, &modelMatrix);
     t3d_matrix_push(ModelMatrix);
@@ -110,7 +122,6 @@ void Nintendo64Renderer::DrawAuthoredMesh(const T3DVertPacked* vertices, uint32_
     }
     t3d_matrix_pop(1);
     t3d_tri_sync();
-    (void)color;
 }
 
 void Nintendo64Renderer::DrawCube() {

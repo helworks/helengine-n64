@@ -4,8 +4,10 @@
 
 #include <libdragon.h>
 
+#include "AmbientLightComponent.hpp"
 #include "Core.hpp"
 #include "CoreInitializationOptions.hpp"
+#include "DirectionalLightComponent.hpp"
 #include "PlatformInfo.hpp"
 #include "RuntimeSceneCatalog.hpp"
 #include "SceneLoadMode.hpp"
@@ -85,9 +87,19 @@ bool Nintendo64RuntimeHost::Initialize() {
     const long drawableCount = objectManager == nullptr || objectManager->get_Drawables3D() == nullptr
         ? 0
         : static_cast<long>(objectManager->get_Drawables3D()->get_Count());
-    debugf("n64:scene-ready cameras=%ld drawables3d=%ld\n", cameraCount, drawableCount);
+    const long directionalLightCount = objectManager == nullptr || objectManager->get_DirectionalLights() == nullptr
+        ? 0
+        : static_cast<long>(objectManager->get_DirectionalLights()->get_Count());
+    const long ambientLightCount = objectManager == nullptr || objectManager->get_AmbientLights() == nullptr
+        ? 0
+        : static_cast<long>(objectManager->get_AmbientLights()->get_Count());
+    debugf("n64:scene-ready cameras=%ld drawables3d=%ld directional=%ld ambient=%ld\n", cameraCount, drawableCount, directionalLightCount, ambientLightCount);
     if (cameraCount != 1 || drawableCount != 1) {
         debugf("n64:error authored-scene-cardinality\n");
+        return false;
+    }
+    if (directionalLightCount > 7) {
+        debugf("n64:error directional-light-limit count=%ld\n", directionalLightCount);
         return false;
     }
     return true;

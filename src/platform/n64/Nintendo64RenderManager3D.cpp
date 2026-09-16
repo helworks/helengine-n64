@@ -27,6 +27,7 @@
 #include "runtime/native_exceptions.hpp"
 #include "system/io/stream.hpp"
 
+#include "platform/n64/Nintendo64LightExtractor.hpp"
 #include "platform/n64/Nintendo64Renderer.hpp"
 #include "platform/n64/Nintendo64RuntimeMaterial.hpp"
 #include "platform/n64/Nintendo64RuntimeModel.hpp"
@@ -167,6 +168,7 @@ void Nintendo64RenderManager3D::Draw() {
     if (!ConfigureCamera(camera)) {
         return;
     }
+    Nintendo64LightExtractor::Extract(OwnerCore->get_ObjectManager(), FrameLights);
     Renderer->BeginScene();
     camera->get_RenderQueue3D()->VisitOrdered(this);
 }
@@ -204,13 +206,18 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
     }
     uint32_t color = 0xFFFFFFFFu;
     bool doubleSided = false;
+    bool lit = false;
     ::Array<::RuntimeMaterial*>* materials = drawable->get_Materials();
     if (materials != nullptr && materials->get_Length() > 0 && (*materials)[0] != nullptr) {
         Nintendo64RuntimeMaterial* material = he_cpp_try_cast<Nintendo64RuntimeMaterial>((*materials)[0]);
         if (material != nullptr) {
             color = material->Color();
             doubleSided = material->DoubleSided();
+            lit = material->Lit();
         }
+    }
+    if (lit && !model->HasNormals()) {
+        throw new InvalidOperationException("N64 lit materials require cooked vertex normals.");
     }
     model->SetColor(color);
 
@@ -223,12 +230,12 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
     const float authoredPosition[3] = {position.X, position.Y, position.Z};
     T3DMat4 modelMatrix;
     t3d_mat4_from_srt(&modelMatrix, authoredScale, authoredRotation, authoredPosition);
-    Renderer->DrawAuthoredMesh(model->Vertices(), model->VertexCount(), model->Indices(), model->IndexCount(), modelMatrix, color, doubleSided);
+    Renderer->DrawAuthoredMesh(model->Vertices(), model->VertexCount(), model->Indices(), model->IndexCount(), modelMatrix, doubleSided, lit, FrameLights);
     DrawCallCount++;
     if (!HasLoggedAuthoredDraw) {
         ::ModelAsset* rawModel = model->get_RawModelAsset();
         const char* modelId = rawModel == nullptr ? "<unknown>" : rawModel->get_Id().c_str();
-        debugf("n64:first-authored-draw model=%s material=n64-unlit calls=%ld\n", modelId, static_cast<long>(DrawCallCount));
+        debugf("n64:first-authored-draw model=%s material=n64-standard lit=%d lights=%d calls=%ld\n", modelId, lit ? 1 : 0, FrameLights.DirectionalCount, static_cast<long>(DrawCallCount));
         HasLoggedAuthoredDraw = true;
     }
 }
