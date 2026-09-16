@@ -97,9 +97,11 @@ Files under `src/platform/n64/`:
 ## Testing
 
 - Builder tests: cooker emits `Lit=true` by default and `Lit=false` for
-  `unlit`; validator accepts directional plus ambient and rejects a point
-  light; platform definition exposes the `lit`/`unlit` choice and the
-  `n64-standard` profile.
+  `unlit`; the platform definition declares directional and ambient lights
+  as supported and point and spot lights as unsupported, and exposes the
+  `lit`/`unlit` choice and the `n64-standard` profile. A packaging-level
+  test that drives the editor packager over a point-light scene is a
+  recorded follow-up.
 - Host tests via `scripts/test-host.ps1`: light extraction math (color
   scaling and clamping, ambient summation, direction negation and
   normalization) and normal packing against known values, using the existing

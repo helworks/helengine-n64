@@ -261,3 +261,20 @@ faces cannot see, but it cannot by itself distinguish the sign. The sign rests
 on the Tiny3D sources cited above.
 
 Hardware execution remains unverified.
+
+### Final branch ROM
+
+After the final review fixes (`324dae4`, `fb57b50`: vertex-slot packing moved
+into the host-tested `Nintendo64VertexPacking` seam, zero-length normals
+rejected at load, host guard uses `kMaxDirectionalLights`), the ROM was rebuilt
+from the same generated workspace and booted again in Gopher64:
+
+- ROM: `C:\dev\helworks\builds\helengine-n64\cube-test\out\rom\helengine_n64_cube_test_lit_final.z64`
+- SHA-256: `4814b7a34aa1a7cc7ffc9c953dfd1f95c5a1266f96f8a37a4d5eaee6d289a142`
+- Bytes: `9224192`
+- Stdout (`out\gopher-lit-final-stdout.log`) is line-for-line identical to the
+  earlier lit run: `lit=1`, `directional=1 ambient=0`, `lights=1`,
+  `first-frame-complete`, no `n64:error`.
+- Four captures 300 ms apart (`out\frames-lit-final`) each differ inside the
+  cube bounding box only (2.2% to 3.1% of window pixels per interval), so the
+  packing refactor left the rendered output and rotation unchanged.
