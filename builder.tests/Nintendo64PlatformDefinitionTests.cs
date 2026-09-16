@@ -45,6 +45,42 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.Equal("true", useRtti.DefaultValue);
     }
 
+    /// <summary>
+    /// Pins the complete set of <c>codegen-use-*</c> knobs the C++ generator reads, with the values the
+    /// shipped generated Core was produced with. Any knob the profile leaves undeclared falls through to
+    /// whichever runtime profile the generator CLI preset carries, so a shift in that default would otherwise
+    /// surface as a native compile error hundreds of generated files deep instead of as a failing test here.
+    /// </summary>
+    [Fact]
+    public void Create_DeclaresEveryCodegenUseKnobTheGeneratorReads() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        Dictionary<string, string> expectedCodegenUseSettings = new(StringComparer.Ordinal) {
+            [Nintendo64PlatformDefinitionFactory.UseStdStringSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdVectorSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdUnorderedMapSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdUnorderedSetSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdFunctionSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdChronoSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdSharedPtrSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdMathSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseHostedFileSystemSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseExceptionsSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseRttiSettingId] = "true"
+        };
+
+        Dictionary<string, string> declaredCodegenUseSettings = definition.CodegenProfiles
+            .Single()
+            .Settings
+            .Where(setting => setting.SettingId.StartsWith("codegen-use-", StringComparison.Ordinal))
+            .ToDictionary(setting => setting.SettingId, setting => setting.DefaultValue, StringComparer.Ordinal);
+
+        Assert.Equal(expectedCodegenUseSettings.OrderBy(entry => entry.Key, StringComparer.Ordinal), declaredCodegenUseSettings.OrderBy(entry => entry.Key, StringComparer.Ordinal));
+        Assert.All(
+            definition.CodegenProfiles.Single().Settings.Where(setting => setting.SettingId.StartsWith("codegen-use-", StringComparison.Ordinal)),
+            setting => Assert.Equal(PlatformSettingKind.Boolean, setting.SettingKind));
+    }
+
     [Fact]
     public void Create_SupportsDirectionalAndAmbientLightsAndRejectsPointAndSpot() {
         PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
