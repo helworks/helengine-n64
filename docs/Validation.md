@@ -227,27 +227,37 @@ region x 262-380, y 223-319.
 
 ### Light direction sign
 
-`CubeTestSun` is authored with yaw -0.65 and pitch -0.85 radians, so its world
-forward is `(0.399, -0.751, -0.525)` - mostly downward - and
-`Nintendo64LightMath::ToLightVector` negates it to the surface-to-light vector
-`(-0.399, 0.751, 0.525)`, pointing up. That matches Tiny3D's convention, where
-`t3d_light_set_directional` takes a surface-to-light vector (its own examples
-pass `{-1, 1, 1}` for an overhead key light), and matches the host test
-`TestLightVectorIsNegatedAndNormalized`, which asserts a light pointing down
-yields a surface-to-light vector pointing up. `scripts/test-host.ps1` reports
-`n64-light-math-tests: PASS`.
+The authority for the sign is Tiny3D's own convention, not the captured frames.
+In `.deps/tiny3d/examples/02_lighting/main.c` lines 103-109 the example places
+the visible light marker at `dir * 20`, so the vector handed to
+`t3d_light_set_directional` points from the surface toward the light, not from
+the light toward the surface. `.deps/tiny3d/src/t3d/rsp/rsp_tiny3d.rspl` lines
+409-424 confirms it in the ucode: the vertex normal is multiplied with the
+stored light vector (`lightDirScale = norm:sfract * lightDirVec:sfract`) and the
+products are accumulated into the light color with no negation anywhere in the
+loop, so a surface facing the light must produce a positive dot product. That is
+why `Nintendo64LightMath::ToLightVector` negates the entity forward axis:
+`CubeTestSun` is authored with yaw -0.65 and pitch -0.85 radians, its world
+forward is `(0.399, -0.751, -0.525)` - mostly downward - and the negated
+surface-to-light vector `(-0.399, 0.751, 0.525)` points up toward the sun. The
+host test `TestLightVectorIsNegatedAndNormalized` pins that negation, and
+`scripts/test-host.ps1` reports `n64-light-math-tests: PASS`.
 
 The brief's by-eye "top face brighter than the sides" check is not observable on
 this scene: the authored camera sits level with the cube centre and
 `CubeTestSpinComponent` rotates yaw only, so only the four side faces are ever
 rasterised - frame05 shows exactly two bands, one face and one background, with
-no third band for a top face. The substitute quantitative check is the peak side
-face luminance. Side-face normals are horizontal, so they can only receive the
+no third band for a top face. The substitute measurement is the peak side face
+luminance. Side-face normals are horizontal, so they can only receive the
 horizontal part of the light, `cos(0.85) = 0.660`, predicting a peak of
-`0.660 * 255 = 168`. The measured peak across the sweep is 168 to 176, one 5-bit
-framebuffer step (8 levels) of the prediction, which confirms the remaining
-`sin(0.85) = 0.751` of the light is on the vertical axis the side faces cannot
-see. Conclusion: the sign is correct and no flip was applied to
-`Nintendo64LightMath::ToLightVector`.
+`0.660 * 255 = 168`; the measured peak across the sweep is 168 to 176, within
+one 5-bit framebuffer step (8 levels) of the prediction. This is a magnitude
+check only. Because the cube spins through a full turn, every side-face normal
+sweeps all horizontal headings, so the set of peak luminances is invariant under
+a sign flip of the light vector - flipping the sign only decides which heading
+peaks, not how bright the peak is. The measurement therefore confirms that the
+remaining `sin(0.85) = 0.751` of the light sits on the vertical axis the side
+faces cannot see, but it cannot by itself distinguish the sign. The sign rests
+on the Tiny3D sources cited above.
 
 Hardware execution remains unverified.

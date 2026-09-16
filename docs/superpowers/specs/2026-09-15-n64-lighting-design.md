@@ -30,11 +30,17 @@ scene without one renders back faces black.
 - The `Lighting` field offers `lit` and `unlit` with default `lit`. The cooker
   sets `PlatformMaterialAsset.Lit` from that field instead of rejecting
   non-unlit values. Texture, transparency, and alpha rules are unchanged.
-- `helengine.lightcomponent` becomes `PlatformComponentSupportKind.Transform`.
-- `Nintendo64SceneCompatibilityValidator` accepts directional and ambient lights
-  and rejects point and spot lights, and rejects more than seven directional
-  lights, because Tiny3D supports seven directional lights and one ambient
-  color.
+- The builder declares `helengine.DirectionalLightComponent` and
+  `helengine.AmbientLightComponent` as `PlatformComponentSupportKind.Transform`,
+  and `helengine.PointLightComponent` and `helengine.SpotLightComponent` as
+  `PlatformComponentSupportKind.Unsupported`, because Tiny3D supports seven
+  directional lights and one ambient color. The former
+  `helengine.lightcomponent` rule is removed: it matched no serialized
+  component id.
+- `Nintendo64SceneCompatibilityValidator` is unchanged. Point and spot lights
+  are rejected by editor packaging through the Unsupported support rules, and
+  the seven-directional-light limit is enforced by the runtime host at scene
+  load and by the light extractor on every frame.
 - Enforcement note: the build manifest carries no component types, so point
   and spot lights are rejected by editor packaging through the builder's
   Unsupported support rules, and the seven-directional-light limit is checked
@@ -79,8 +85,10 @@ Files under `src/platform/n64/`:
 
 ## Error handling
 
-- Unsupported light types and more than seven directional lights fail at
-  package validation, not at runtime.
+- Point and spot lights fail in editor packaging through the builder's
+  Unsupported support rules. More than seven directional lights fails in the
+  runtime host at scene load, which refuses to start rather than silently
+  dropping lights.
 - A lit material on a model without normals fails at the first draw with an
   exception, preserving the existing fail-loud policy.
 - Colors are clamped to the 0-255 range; direction vectors are normalized and
