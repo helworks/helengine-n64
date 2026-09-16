@@ -15,6 +15,14 @@ an isolated master worktree registered for the `n64` platform row only - is
 recorded in `docs/Validation.md`. Check this before reading a native compile
 failure as a problem with the authored scene.
 
+The editor the recorded ROM was generated with also carried helengine commit
+`c0157e99`, which guards the draw-timing path against a null 3D render manager.
+That commit is not on helengine `main`, so regenerating the N64 Core from `main`
+today produces a Core without that guard and therefore a different ROM hash than
+`docs/Validation.md` records. N64 does not depend on the guard - the runtime host
+always supplies a 3D render manager - so this is a reproducibility caveat rather
+than a functional one, and it resolves once that commit lands on `main`.
+
 The generic editor/build graph supplies the generated Core and cooked manifest.
 The N64 builder stages only manifest-declared scene/material/model payloads,
 writes `n64_runtime_scene_catalog.hpp/.cpp`, and invokes the existing Docker
