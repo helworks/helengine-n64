@@ -63,6 +63,8 @@ OBJECTS += \
 	$(BUILD_DIR)/platform/n64/Nintendo64ContentStreamSource.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64RuntimeMaterial.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64RuntimeModel.o \
+	$(BUILD_DIR)/platform/n64/Nintendo64TexelPacking.o \
+	$(BUILD_DIR)/platform/n64/Nintendo64RuntimeTexture.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64VertexPacking.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64RenderManager3D.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64LightMath.o \
