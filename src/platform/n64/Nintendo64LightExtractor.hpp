@@ -14,7 +14,7 @@ public:
     /// Sums every registered ambient light into the frame ambient color and converts
     /// every registered directional light into a Tiny3D color and surface-to-light vector.
     /// Throws InvalidOperationException when more than seven directional lights are
-    /// registered or a light direction is degenerate.
+    /// registered, a light color is not finite, or a light direction is degenerate.
     static void Extract(::ObjectManager* objectManager, Nintendo64FrameLights& lights);
 };
 

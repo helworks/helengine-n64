@@ -32,7 +32,9 @@ void Nintendo64LightExtractor::Extract(::ObjectManager* objectManager, Nintendo6
             Nintendo64LightMath::Accumulate(color.X, color.Y, color.Z, ambient->get_Intensity(), ambientAccumulator);
         }
     }
-    Nintendo64LightMath::PackAccumulated(ambientAccumulator, lights.Ambient);
+    if (!Nintendo64LightMath::PackAccumulated(ambientAccumulator, lights.Ambient)) {
+        throw new InvalidOperationException("N64 ambient light color is not finite.");
+    }
 
     lights.DirectionalCount = 0;
     ::List<::DirectionalLightComponent*>* directionalLights = objectManager->get_DirectionalLights();
@@ -49,7 +51,9 @@ void Nintendo64LightExtractor::Extract(::ObjectManager* objectManager, Nintendo6
         }
         Nintendo64DirectionalLight& entry = lights.Directional[lights.DirectionalCount];
         const ::float4 color = directional->get_Color();
-        Nintendo64LightMath::PackColor(color.X, color.Y, color.Z, directional->get_Intensity(), entry.Color);
+        if (!Nintendo64LightMath::PackColor(color.X, color.Y, color.Z, directional->get_Intensity(), entry.Color)) {
+            throw new InvalidOperationException("N64 directional light color is not finite.");
+        }
         const ::float3 forward = ::LightDirectionUtility::GetLightDirection(directional);
         if (!Nintendo64LightMath::ToLightVector(forward.X, forward.Y, forward.Z, entry.Direction)) {
             throw new InvalidOperationException("N64 directional light has a zero-length direction.");
