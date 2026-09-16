@@ -20,21 +20,24 @@ The editor the recorded ROM was generated with also carried helengine commit
 on helengine `main`, so regenerating no longer depends on building from a feature
 branch.
 
-A regeneration against current csharpcodegen `master` is expected to fail to
-compile, and the failure is a real defect in this platform rather than a toolchain
-problem. This factory declares `PlatformSerializationEndianness.LittleEndian`,
-which reaches the generated config as `HE_CPP_PLATFORM_IS_LITTLE_ENDIAN 1`. N64 is
-big-endian MIPS, and the other big-endian consoles declare `BigEndian` - see the
-GameCube and Wii platform definitions. csharpcodegen `8ae4e55` added
-`runtime/native_endian.hpp`, which derives the host order from `__BYTE_ORDER__`
-and static_asserts that it agrees with the declared value, so the mismatch now
-stops the build instead of silently byte-swapping every multi-byte value.
+This factory declares `PlatformSerializationEndianness.LittleEndian`, which
+reaches the generated config as `HE_CPP_PLATFORM_IS_LITTLE_ENDIAN 1`. That value
+describes the byte order of cooked data, not the processor, so a big-endian
+console reading little-endian payloads is a consistent configuration rather than
+a defect. csharpcodegen `d8ad75d` makes that explicit: `runtime/native_endian.hpp`
+derives the host order from the compiler alone and no longer ties it to the
+declared serialization order.
 
-The recorded ROM predates that header and is unaffected. Correcting the
-declaration is not a one-line change: on the old code path the reads evidently
-came out right, since the recorded ROM loads and renders every cooked asset, so
-changing the declaration changes read behaviour as well as silencing the assert.
-It needs a regeneration and a boot test against the recorded ROM as a baseline.
+Cooked assets are read through the engine's `EngineBinaryReader`, which dispatches
+to `BinaryReaderBE` or `BinaryReaderLE`; those assemble each value byte by byte
+and are endian-correct on any host by construction. That is why this platform
+loads and renders every cooked asset correctly despite running big-endian
+hardware against little-endian payloads.
+
+What the declaration does cost is a byte swap on every multi-byte field this
+console reads, where GameCube and Wii declare `BigEndian` and pay nothing.
+Changing it would require re-cooking assets, so it is a deliberate performance
+question rather than a correction, and nothing forces it.
 
 The generic editor/build graph supplies the generated Core and cooked manifest.
 The N64 builder stages only manifest-declared scene/material/model payloads,
