@@ -21,11 +21,14 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.Equal(new[] { "lit", "unlit" }, lighting.AllowedValues);
         Assert.Equal(new[] { "debug", "release" }, definition.BuildProfiles.Select(profile => profile.ProfileId));
         Assert.All(definition.BuildProfiles, profile => Assert.Equal("n64-standard", profile.GraphicsProfileId));
-        Assert.Contains(definition.CodegenProfiles.Single().Settings, setting =>
-            setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures
-            && setting.DefaultValue.Contains("shaders", StringComparison.OrdinalIgnoreCase)
-            && setting.DefaultValue.Contains("render2d", StringComparison.OrdinalIgnoreCase)
-            && setting.DefaultValue.Contains("text2d", StringComparison.OrdinalIgnoreCase));
+        PlatformSettingDefinition forcedDisabled = Assert.Single(
+            definition.CodegenProfiles.Single().Settings,
+            setting => setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures);
+        Assert.Contains("shaders", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("text2d", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("debug_overlay", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("render2d", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sprites", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
