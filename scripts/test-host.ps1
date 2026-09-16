@@ -46,3 +46,19 @@ $lightRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
     'helengine-n64-build', './build/n64-light-math-tests')
 & docker @lightRun
 if ($LASTEXITCODE -ne 0) { throw 'N64 light-math tests failed.' }
+
+$vertexCompile = @(
+    'run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', 'g++',
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-pedantic',
+    '-Itests/stubs', '-I.',
+    'tests/Nintendo64VertexPackingTests.cpp',
+    'src/platform/n64/Nintendo64VertexPacking.cpp',
+    '-o', 'build/n64-vertex-packing-tests'
+)
+& docker @vertexCompile
+if ($LASTEXITCODE -ne 0) { throw 'N64 vertex-packing test compilation failed.' }
+$vertexRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', './build/n64-vertex-packing-tests')
+& docker @vertexRun
+if ($LASTEXITCODE -ne 0) { throw 'N64 vertex-packing tests failed.' }

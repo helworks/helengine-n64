@@ -16,6 +16,7 @@
 #include "runtime/native_list.hpp"
 
 #include "platform/n64/Nintendo64ContentStreamSource.hpp"
+#include "platform/n64/Nintendo64FrameLights.hpp"
 #include "platform/n64/Nintendo64InputBackend.hpp"
 #include "platform/n64/Nintendo64RenderManager2D.hpp"
 #include "platform/n64/Nintendo64RenderManager3D.hpp"
@@ -98,7 +99,7 @@ bool Nintendo64RuntimeHost::Initialize() {
         debugf("n64:error authored-scene-cardinality\n");
         return false;
     }
-    if (directionalLightCount > 7) {
+    if (directionalLightCount > kMaxDirectionalLights) {
         debugf("n64:error directional-light-limit count=%ld\n", directionalLightCount);
         return false;
     }

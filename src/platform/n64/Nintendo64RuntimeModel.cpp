@@ -11,6 +11,8 @@
 #include "RuntimeSubmesh.hpp"
 #include "runtime/array.hpp"
 
+#include "platform/n64/Nintendo64VertexPacking.hpp"
+
 namespace helengine::n64 {
 namespace {
 
@@ -20,24 +22,13 @@ constexpr int32_t kMaxIndices = 384; // 128 triangle-list triangles.
 
 /// Writes one logical vertex into its interleaved Tiny3D slot with a packed normal, or a zero normal when none is supplied.
 void SetPackedVertex(T3DVertPacked& packed, uint32_t logicalIndex, const float3& position, const float3* normal) {
-    const bool second = (logicalIndex & 1u) != 0;
-    int16_t* outputPosition = second ? packed.posB : packed.posA;
-    uint16_t* outputNormal = second ? &packed.normB : &packed.normA;
-    uint32_t* outputColor = second ? &packed.rgbaB : &packed.rgbaA;
-    int16_t* outputUv = second ? packed.stB : packed.stA;
-
-    outputPosition[0] = static_cast<int16_t>(std::lround(position.X * kPositionScale));
-    outputPosition[1] = static_cast<int16_t>(std::lround(position.Y * kPositionScale));
-    outputPosition[2] = static_cast<int16_t>(std::lround(position.Z * kPositionScale));
-    if (normal == nullptr) {
-        *outputNormal = 0;
-    } else {
-        const T3DVec3 packedNormal = {{normal->X, normal->Y, normal->Z}};
-        *outputNormal = t3d_vert_pack_normal(&packedNormal);
+    uint16_t packedNormal = 0;
+    if (normal != nullptr) {
+        const T3DVec3 normalVector = {{normal->X, normal->Y, normal->Z}};
+        packedNormal = t3d_vert_pack_normal(&normalVector);
     }
-    *outputColor = 0xFFFFFFFFu;
-    outputUv[0] = 0;
-    outputUv[1] = 0;
+    const float positionValues[3] = {position.X, position.Y, position.Z};
+    Nintendo64VertexPacking::WriteVertex(packed, logicalIndex, positionValues, kPositionScale, packedNormal, 0xFFFFFFFFu);
 }
 
 /// True when the position is finite and fits the fixed-point vertex range once scaled.
@@ -48,9 +39,15 @@ bool IsFinitePosition(const float3& position) {
         std::fabs(position.Z * kPositionScale) <= 32767.0f;
 }
 
-/// True when every component of a cooked normal is finite; packing has no fixed-point range to respect.
-bool IsFiniteNormal(const float3& normal) {
-    return std::isfinite(normal.X) && std::isfinite(normal.Y) && std::isfinite(normal.Z);
+/// True when every component of a cooked normal is finite and the normal has a non-zero length.
+/// Packing has no fixed-point range to respect, but Tiny3D's `t3d_vert_pack_normal` normalizes
+/// through `t3d_vec3_norm`, which divides by the length, so a zero-length normal must be rejected.
+bool IsUsableNormal(const float3& normal) {
+    if (!std::isfinite(normal.X) || !std::isfinite(normal.Y) || !std::isfinite(normal.Z)) {
+        return false;
+    }
+    const float squaredLength = normal.X * normal.X + normal.Y * normal.Y + normal.Z * normal.Z;
+    return squaredLength > 0.0f;
 }
 
 } // namespace
@@ -87,7 +84,7 @@ bool Nintendo64RuntimeModel::Initialize(const ::ModelAsset* asset) {
     }
     if (hasNormals) {
         for (int32_t vertex = 0; vertex < vertexCount; vertex++) {
-            if (!IsFiniteNormal((*asset->Normals)[vertex])) {
+            if (!IsUsableNormal((*asset->Normals)[vertex])) {
                 return false;
             }
         }
