@@ -160,6 +160,62 @@ public sealed class Nintendo64TextureCookTests {
     }
 
     /// <summary>
+    /// Ensures a serialized engine texture asset source, such as the editor's generated platform font atlas,
+    /// is decoded through the asset serializer instead of the system image decoder.
+    /// </summary>
+    [Fact]
+    public void Decode_ReadsGeneratedEngineTextureAssetSource() {
+        string sourcePath = WriteSourceEngineTexture(128, 96);
+        try {
+            TextureAsset decoded = new Nintendo64SourceTextureDecoder().Decode(sourcePath);
+
+            Assert.Equal(128, decoded.Width);
+            Assert.Equal(96, decoded.Height);
+            Assert.Equal(TextureAssetColorFormat.Rgba32, decoded.ColorFormat);
+            Assert.Equal(128 * 96 * 4, decoded.Colors.Length);
+
+            TextureAsset cooked = new Nintendo64TextureCooker().Cook(decoded, new TextureAssetProcessorSettings {
+                MaxResolution = 64,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            });
+
+            Assert.Equal(64, cooked.Width);
+            Assert.Equal(48, cooked.Height);
+        } finally {
+            File.Delete(sourcePath);
+        }
+    }
+
+    /// <summary>
+    /// Writes one serialized engine texture asset mirroring the editor's generated platform font atlas.
+    /// </summary>
+    /// <param name="width">Source width in pixels.</param>
+    /// <param name="height">Source height in pixels.</param>
+    /// <returns>Absolute path of the written engine texture asset.</returns>
+    static string WriteSourceEngineTexture(int width, int height) {
+        string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".hetex");
+        byte[] colors = new byte[width * height * 4];
+        for (int offset = 0; offset < colors.Length; offset += 4) {
+            colors[offset] = 40;
+            colors[offset + 1] = 80;
+            colors[offset + 2] = 120;
+            colors[offset + 3] = 255;
+        }
+
+        File.WriteAllBytes(path, helengine.files.AssetSerializer.SerializeToBytes(new TextureAsset {
+            Id = "font-atlas",
+            Width = checked((ushort)width),
+            Height = checked((ushort)height),
+            Colors = colors,
+            PaletteColors = Array.Empty<byte>(),
+            ColorFormat = TextureAssetColorFormat.Rgba32,
+            AlphaPrecision = TextureAssetAlphaPrecision.A8
+        }));
+        return path;
+    }
+
+    /// <summary>
     /// Writes one transparent-cornered test PNG and returns its path.
     /// </summary>
     /// <param name="width">Source width in pixels.</param>
