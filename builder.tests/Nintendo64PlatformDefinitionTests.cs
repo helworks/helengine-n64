@@ -32,6 +32,20 @@ public sealed class Nintendo64PlatformDefinitionTests {
     }
 
     [Fact]
+    public void Create_DeclaresExceptionsAndRttiBecauseTheGeneratedCoreNeedsBoth() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        PlatformSettingDefinition useExceptions = Assert.Single(
+            definition.CodegenProfiles.Single().Settings,
+            setting => setting.SettingId == Nintendo64PlatformDefinitionFactory.UseExceptionsSettingId);
+        PlatformSettingDefinition useRtti = Assert.Single(
+            definition.CodegenProfiles.Single().Settings,
+            setting => setting.SettingId == Nintendo64PlatformDefinitionFactory.UseRttiSettingId);
+        Assert.Equal("true", useExceptions.DefaultValue);
+        Assert.Equal("true", useRtti.DefaultValue);
+    }
+
+    [Fact]
     public void Create_SupportsDirectionalAndAmbientLightsAndRejectsPointAndSpot() {
         PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
 

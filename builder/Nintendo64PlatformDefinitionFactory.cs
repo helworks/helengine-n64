@@ -11,6 +11,16 @@ public static class Nintendo64PlatformDefinitionFactory {
     // text2d stays disabled until the N64 text pass exists.
     const string ForcedDisabledFeatures = "debug_overlay;shaders;text2d";
 
+    /// <summary>
+    /// Codegen option id selecting C++ exception unwinding for the generated Core.
+    /// </summary>
+    public const string UseExceptionsSettingId = "codegen-use-exceptions";
+
+    /// <summary>
+    /// Codegen option id selecting compiler RTTI for the generated Core's casts and generic dispatch.
+    /// </summary>
+    public const string UseRttiSettingId = "codegen-use-rtti";
+
     public static PlatformDefinition Create() {
         PlatformSettingDefinition[] buildSettings = [
             new("game-name", "Game Name", PlatformSettingKind.Text, "helengine", true, []),
@@ -29,7 +39,13 @@ public static class Nintendo64PlatformDefinitionFactory {
                 new("pointer-size-bytes", "Pointer Size (Bytes)", PlatformSettingKind.Text, "4", true, []),
                 new("type-remaps", "Type Remaps", PlatformSettingKind.Text, "System.Numerics.Vector2=helengine.float2;System.Numerics.Vector3=helengine.float3;System.Numerics.Vector4=helengine.float4;System.Numerics.Quaternion=helengine.float4", true, []),
                 new("native-file-system-header", "Native File System Header", PlatformSettingKind.Text, "\"platform/n64/Nintendo64ContentStreamSource.hpp\"", true, []),
-                new("native-file-system-type", "Native File System Type", PlatformSettingKind.Text, "helengine::n64::Nintendo64ContentStreamSource", true, [])
+                new("native-file-system-type", "Native File System Type", PlatformSettingKind.Text, "helengine::n64::Nintendo64ContentStreamSource", true, []),
+                // The codegen CLI defaults to its stl-lite runtime profile, which turns both of these off.
+                // The libdragon toolchain compiles the generated Core with exceptions and RTTI enabled, and the
+                // Core needs both: it throws from generated deserializers and selects generic implementations
+                // through dynamic_cast. Declaring them here keeps that contract explicit instead of implicit.
+                new(UseExceptionsSettingId, "Use C++ Exceptions", PlatformSettingKind.Boolean, "true", true, []),
+                new(UseRttiSettingId, "Use C++ RTTI", PlatformSettingKind.Boolean, "true", true, [])
             ]);
 
         PlatformMaterialSchemaDefinition materialSchema = new(
