@@ -114,6 +114,52 @@ public sealed class Nintendo64TextureCookTests {
     }
 
     /// <summary>
+    /// Ensures box filtering averages real pixel values and preserves aspect ratio on a non-square source.
+    /// </summary>
+    [Fact]
+    public void Cook_AveragesPixelsAndPreservesAspectRatio() {
+        // Four columns tinted 10/20/30/40 red over two rows collapse to two columns averaging 15 and 35.
+        string sourcePath = WriteColumnTintedSourcePng(4, 2);
+        try {
+            TextureAsset cooked = new Nintendo64TextureCooker().Cook(
+                new Nintendo64SourceTextureDecoder().Decode(sourcePath),
+                new TextureAssetProcessorSettings { MaxResolution = 2, ColorFormat = TextureAssetColorFormat.Rgba32, AlphaPrecision = TextureAssetAlphaPrecision.A8 });
+
+            Assert.Equal(2, cooked.Width);
+            Assert.Equal(1, cooked.Height);
+            Assert.Equal(2 * 1 * 4, cooked.Colors.Length);
+            Assert.Equal((byte)15, cooked.Colors[0]);
+            Assert.Equal((byte)100, cooked.Colors[1]);
+            Assert.Equal((byte)200, cooked.Colors[2]);
+            Assert.Equal((byte)255, cooked.Colors[3]);
+            Assert.Equal((byte)35, cooked.Colors[4]);
+            Assert.Equal((byte)100, cooked.Colors[5]);
+            Assert.Equal((byte)200, cooked.Colors[6]);
+        } finally {
+            File.Delete(sourcePath);
+        }
+    }
+
+    /// <summary>
+    /// Ensures an opaque alpha precision forces every cooked texel to full alpha.
+    /// </summary>
+    [Fact]
+    public void Cook_ForcesFullAlphaForOpaquePrecision() {
+        string sourcePath = WriteSourcePng(8, 8);
+        try {
+            TextureAsset cooked = new Nintendo64TextureCooker().Cook(
+                new Nintendo64SourceTextureDecoder().Decode(sourcePath),
+                new TextureAssetProcessorSettings { MaxResolution = 4, ColorFormat = TextureAssetColorFormat.Rgba32, AlphaPrecision = TextureAssetAlphaPrecision.Opaque });
+
+            for (int alphaOffset = 3; alphaOffset < cooked.Colors.Length; alphaOffset += 4) {
+                Assert.Equal((byte)255, cooked.Colors[alphaOffset]);
+            }
+        } finally {
+            File.Delete(sourcePath);
+        }
+    }
+
+    /// <summary>
     /// Writes one transparent-cornered test PNG and returns its path.
     /// </summary>
     /// <param name="width">Source width in pixels.</param>
@@ -125,6 +171,24 @@ public sealed class Nintendo64TextureCookTests {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 bitmap.SetPixel(x, y, Color.FromArgb(0, 10, 20, 30));
+            }
+        }
+        bitmap.Save(path, ImageFormat.Png);
+        return path;
+    }
+
+    /// <summary>
+    /// Writes one test PNG whose columns carry distinct red values so averaging is observable.
+    /// </summary>
+    /// <param name="width">Source width in pixels.</param>
+    /// <param name="height">Source height in pixels.</param>
+    /// <returns>Absolute path of the written PNG.</returns>
+    static string WriteColumnTintedSourcePng(int width, int height) {
+        string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".png");
+        using Bitmap bitmap = new(width, height);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                bitmap.SetPixel(x, y, Color.FromArgb(255, (x + 1) * 10, 100, 200));
             }
         }
         bitmap.Save(path, ImageFormat.Png);
