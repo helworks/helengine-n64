@@ -112,6 +112,17 @@ the runtime renders them in a screen-space 2D pass after the Tiny3D 3D pass.
 `RoundedRectComponent`s are still not drawn: an instruction overlay reaches an
 N64 ROM as its icons alone.
 
+`Core::Draw` only drives the 3D render manager. `RenderManager2D::Draw` is a
+hook each host calls for itself, so the N64 runtime host runs the 2D pass right
+after `Core::Draw` and before `EndFrame`, while the frame buffer is still
+attached.
+
+The N64 codegen profile declares `codegen-use-exceptions` and
+`codegen-use-rtti` as true. The codegen CLI otherwise defaults to its stl-lite
+runtime profile, which disables both, and the generated Core needs them: it
+throws from generated deserializers and selects generic implementations through
+`dynamic_cast`.
+
 The builder owns texture cooking for N64. Each declared cook work item is
 decoded (authored image files through the system decoder, editor-generated
 engine texture assets such as the platform font atlases through the asset
