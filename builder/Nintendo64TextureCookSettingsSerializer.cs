@@ -25,7 +25,10 @@ public static class Nintendo64TextureCookSettingsSerializer {
     }
 
     /// <summary>
-    /// Parses one N64 texture settings payload from the string form stored on cook work items.
+    /// Parses one N64 texture settings payload from the string form stored on cook work items. The
+    /// <c>maxResolution</c>, <c>colorFormat</c>, and <c>alphaPrecision</c> properties are all required; a payload
+    /// missing any of them is a malformed N64 texture cook settings payload and is rejected rather than
+    /// silently defaulted.
     /// </summary>
     /// <param name="serializedSettings">Serialized settings string.</param>
     /// <returns>Parsed N64 texture settings payload.</returns>
@@ -36,15 +39,19 @@ public static class Nintendo64TextureCookSettingsSerializer {
 
         using JsonDocument document = JsonDocument.Parse(serializedSettings);
         JsonElement root = document.RootElement;
-        int maxResolution = root.TryGetProperty("maxResolution", out JsonElement maxResolutionElement)
-            ? maxResolutionElement.GetInt32()
-            : 0;
-        string colorFormatName = root.TryGetProperty("colorFormat", out JsonElement colorFormatElement)
-            ? colorFormatElement.GetString() ?? TextureAssetColorFormat.Rgba32.ToString()
-            : TextureAssetColorFormat.Rgba32.ToString();
-        string alphaPrecisionName = root.TryGetProperty("alphaPrecision", out JsonElement alphaPrecisionElement)
-            ? alphaPrecisionElement.GetString() ?? TextureAssetAlphaPrecision.A8.ToString()
-            : TextureAssetAlphaPrecision.A8.ToString();
+        if (!root.TryGetProperty("maxResolution", out JsonElement maxResolutionElement)) {
+            throw new InvalidOperationException("Malformed N64 texture cook settings payload: 'maxResolution' is required.");
+        }
+        if (!root.TryGetProperty("colorFormat", out JsonElement colorFormatElement)) {
+            throw new InvalidOperationException("Malformed N64 texture cook settings payload: 'colorFormat' is required.");
+        }
+        if (!root.TryGetProperty("alphaPrecision", out JsonElement alphaPrecisionElement)) {
+            throw new InvalidOperationException("Malformed N64 texture cook settings payload: 'alphaPrecision' is required.");
+        }
+
+        int maxResolution = maxResolutionElement.GetInt32();
+        string colorFormatName = colorFormatElement.GetString();
+        string alphaPrecisionName = alphaPrecisionElement.GetString();
 
         if (!Enum.TryParse(colorFormatName, true, out TextureAssetColorFormat colorFormat)) {
             throw new InvalidOperationException($"Unsupported N64 texture color format '{colorFormatName}'.");

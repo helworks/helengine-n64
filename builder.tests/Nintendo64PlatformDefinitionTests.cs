@@ -176,6 +176,16 @@ public sealed class Nintendo64PlatformDefinitionTests {
             "{\"maxResolution\":64,\"colorFormat\":\"Bogus\",\"alphaPrecision\":\"A8\"}"));
     }
 
+    [Fact]
+    public void TextureCookSettings_RejectPayloadMissingRequiredProperties() {
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"colorFormat\":\"Rgba32\",\"alphaPrecision\":\"A8\"}"));
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"maxResolution\":64,\"alphaPrecision\":\"A8\"}"));
+        Assert.Throws<InvalidOperationException>(() => Nintendo64TextureCookSettingsSerializer.Deserialize(
+            "{\"maxResolution\":64,\"colorFormat\":\"Rgba32\"}"));
+    }
+
     static string ResolveFeatureCatalogPath() {
         string configuredRoot = Environment.GetEnvironmentVariable("HELENGINE_ROOT") ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(configuredRoot)) {
