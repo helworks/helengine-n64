@@ -16,12 +16,25 @@ recorded in `docs/Validation.md`. Check this before reading a native compile
 failure as a problem with the authored scene.
 
 The editor the recorded ROM was generated with also carried helengine commit
-`c0157e99`, which guards the draw-timing path against a null 3D render manager.
-That commit is not on helengine `main`, so regenerating the N64 Core from `main`
-today produces a Core without that guard and therefore a different ROM hash than
-`docs/Validation.md` records. N64 does not depend on the guard - the runtime host
-always supplies a 3D render manager - so this is a reproducibility caveat rather
-than a functional one, and it resolves once that commit lands on `main`.
+`c0157e99`, the null-guard on the draw-timing path. That commit has since landed
+on helengine `main`, so regenerating no longer depends on building from a feature
+branch.
+
+A regeneration against current csharpcodegen `master` is expected to fail to
+compile, and the failure is a real defect in this platform rather than a toolchain
+problem. This factory declares `PlatformSerializationEndianness.LittleEndian`,
+which reaches the generated config as `HE_CPP_PLATFORM_IS_LITTLE_ENDIAN 1`. N64 is
+big-endian MIPS, and the other big-endian consoles declare `BigEndian` - see the
+GameCube and Wii platform definitions. csharpcodegen `8ae4e55` added
+`runtime/native_endian.hpp`, which derives the host order from `__BYTE_ORDER__`
+and static_asserts that it agrees with the declared value, so the mismatch now
+stops the build instead of silently byte-swapping every multi-byte value.
+
+The recorded ROM predates that header and is unaffected. Correcting the
+declaration is not a one-line change: on the old code path the reads evidently
+came out right, since the recorded ROM loads and renders every cooked asset, so
+changing the declaration changes read behaviour as well as silencing the assert.
+It needs a regeneration and a boot test against the recorded ROM as a baseline.
 
 The generic editor/build graph supplies the generated Core and cooked manifest.
 The N64 builder stages only manifest-declared scene/material/model payloads,
