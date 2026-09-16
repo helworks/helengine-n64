@@ -4,6 +4,17 @@ The authored mode is selected with `-Mode authored` and requires a generated
 Core tree. It refuses to fall back to the diagnostic cube when `Core.hpp` is
 missing. Diagnostic mode remains available with `-Mode diagnostic`.
 
+## Toolchain prerequisite
+
+N64 currently requires a C++ code generator built from csharpcodegen commit
+`b477b70` or later, which is the first to emit `runtime/native_runtime.hpp`. The
+shared `csharpcodegen\codegen\bin\Release` executable is stale and does not
+contain it; generating the N64 Core against that build produces a tree that
+fails to compile with `'HeCppString' does not name a type`. The working setup -
+an isolated master worktree registered for the `n64` platform row only - is
+recorded in `docs/Validation.md`. Check this before reading a native compile
+failure as a problem with the authored scene.
+
 The generic editor/build graph supplies the generated Core and cooked manifest.
 The N64 builder stages only manifest-declared scene/material/model payloads,
 writes `n64_runtime_scene_catalog.hpp/.cpp`, and invokes the existing Docker
@@ -117,11 +128,22 @@ hook each host calls for itself, so the N64 runtime host runs the 2D pass right
 after `Core::Draw` and before `EndFrame`, while the frame buffer is still
 attached.
 
-The N64 codegen profile declares `codegen-use-exceptions` and
-`codegen-use-rtti` as true. The codegen CLI otherwise defaults to its stl-lite
-runtime profile, which disables both, and the generated Core needs them: it
-throws from generated deserializers and selects generic implementations through
-`dynamic_cast`.
+`Draw` is the only 2D hook the N64 host currently drives. The generated
+`RenderManager2D` also declares `Update()` and `FlushReleasedTextures()`, and
+neither is called from the N64 frame loop. Nothing on this platform needs them
+yet - sprite textures are built once from cooked payloads and never released or
+re-uploaded mid-frame - but a feature that relies on either one (deferred
+texture release, animated or streamed 2D content) will need the host to start
+driving them first.
+
+The N64 codegen profile declares all eleven `codegen-use-*` options the C++
+backend reads, every one of them true. Exceptions and RTTI are the two the Core
+visibly breaks without - it throws from generated deserializers and selects
+generic implementations through `dynamic_cast` - but any option left undeclared
+inherits whichever runtime profile the CLI preset carries, and both the
+`native-core-boot` and `n64-minimal` presets carry one that would regenerate a
+Core this repository cannot compile. The full set with its evidence is in
+`docs/RuntimeCompatibility.md`.
 
 The builder owns texture cooking for N64. Each declared cook work item is
 decoded (authored image files through the system decoder, editor-generated
