@@ -149,3 +149,105 @@ bounding box (roughly x 262-381, y 223-319 in the 640x480 window), between
 from a square face to a rotated outline with visible edges. The unlit white
 material renders every face the same color, so only the silhouette moves.
 Hardware execution remains unverified.
+
+## cube_test lighting
+
+Scene lighting was validated end to end on 2026-09-16 through the normal editor
+build of `C:\dev\helprojs\demodisc\project.heproj` (`--build n64
+--build-profile release`), logged to
+`C:\dev\helworks\builds\helengine-n64\cube-test\normal-build-lighting.log`. The
+editor completed generation, cooking, and DragonFS staging and then failed only
+at the native step because `pwsh` is not on the editor process PATH. The native
+build was rerun directly against the finalized workspace
+`5e4a87850e7c4a52aa6325ca4edd70f5`:
+
+```powershell
+pwsh -NoProfile -File scripts/build.ps1 -Clean -Mode authored `
+  -GeneratedCoreRoot C:\dev\helworks\builds\helengine-n64\cube-test\work\n64\5e4a87850e7c4a52aa6325ca4edd70f5\generated-core `
+  -FilesystemRoot C:\dev\helworks\builds\helengine-n64\cube-test\work\n64\5e4a87850e7c4a52aa6325ca4edd70f5\builder\n64-dragonfs
+```
+
+The cooked scene staged to
+`cooked/scenes/rendering/cube_test.hasset` and its material to
+`cooked/materials/rendering/cube_test/cubetestsolid.hasset`.
+
+Final artifact, copied to
+`C:\dev\helworks\builds\helengine-n64\cube-test\out\rom\helengine_n64_cube_test_lit.z64`:
+
+- ROM SHA-256: `b5875d3990666abd48cf59d12a827401e96279bb0ca867245e39aee06de869e6`
+- ROM bytes: `9224192`
+- ELF load image: text `873128`, data `214113`, bss `10304`, total `1097545`
+
+Gopher64 stdout (`out\gopher-lit-stdout.log`) contained no `n64:error` line:
+
+```text
+n64:authored-runtime-start
+n64:video-ready
+n64:renderer-ready
+n64:dragonfs-ready
+n64:core-ready
+n64:startup-scene id=cube_test
+n64:material-loaded id=Materials.rendering.cube_test.CubeTestSolid color=FFFFFFFF lit=1
+n64:model-loaded id=engine:model:cube vertices=24 indices=36
+n64:scene-ready cameras=1 drawables3d=1 directional=1 ambient=0
+n64:first-authored-draw model=engine:model:cube material=n64-standard lit=1 lights=1 calls=1
+n64:first-frame-complete
+```
+
+`lit=1` on both the cooked material and the draw, and `directional=1 ambient=0`,
+confirm the cook kept `CubeTestSun` and that the material is lit by default.
+
+### Shading evidence
+
+Eight captures 250 ms apart in `out\frames-lit`. Distinct non-background
+luminance levels inside the cube crop `(240, 200, 400, 330)`:
+
+```text
+frame01 levels=10 min/max=(44, 144)
+frame02 levels= 7 min/max=(84, 176)
+frame03 levels= 5 min/max=(72, 136)
+frame04 levels= 9 min/max=(56, 152)
+frame05 levels= 3 min/max=(84, 168)
+frame06 levels= 2 min/max=(76, 136)
+frame07 levels= 7 min/max=(48, 144)
+frame08 levels= 6 min/max=(84, 176)
+```
+
+Every frame has at least two non-background levels separated by more than 40,
+and no level saturates at 255. The previous unlit ROM rendered the whole cube at
+a single flat white level, so this is the shading change. Per-face bands (the
+cube's visible faces are flat, and the spread within a band is the 5-bit
+framebuffer dither) show adjacent faces at clearly different levels, for example
+frame01 at ~70 and ~143 and frame05 at 0 and 168. A face reaching exactly 0
+confirms there is no built-in ambient term.
+
+Motion (`frame_diff.py`) still passes: each consecutive pair differs by 2.5% to
+3.4% of window pixels, and every difference bounding box is inside the cube
+region x 262-380, y 223-319.
+
+### Light direction sign
+
+`CubeTestSun` is authored with yaw -0.65 and pitch -0.85 radians, so its world
+forward is `(0.399, -0.751, -0.525)` - mostly downward - and
+`Nintendo64LightMath::ToLightVector` negates it to the surface-to-light vector
+`(-0.399, 0.751, 0.525)`, pointing up. That matches Tiny3D's convention, where
+`t3d_light_set_directional` takes a surface-to-light vector (its own examples
+pass `{-1, 1, 1}` for an overhead key light), and matches the host test
+`TestLightVectorIsNegatedAndNormalized`, which asserts a light pointing down
+yields a surface-to-light vector pointing up. `scripts/test-host.ps1` reports
+`n64-light-math-tests: PASS`.
+
+The brief's by-eye "top face brighter than the sides" check is not observable on
+this scene: the authored camera sits level with the cube centre and
+`CubeTestSpinComponent` rotates yaw only, so only the four side faces are ever
+rasterised - frame05 shows exactly two bands, one face and one background, with
+no third band for a top face. The substitute quantitative check is the peak side
+face luminance. Side-face normals are horizontal, so they can only receive the
+horizontal part of the light, `cos(0.85) = 0.660`, predicting a peak of
+`0.660 * 255 = 168`. The measured peak across the sweep is 168 to 176, one 5-bit
+framebuffer step (8 levels) of the prediction, which confirms the remaining
+`sin(0.85) = 0.751` of the light is on the vertical axis the side faces cannot
+see. Conclusion: the sign is correct and no flip was applied to
+`Nintendo64LightMath::ToLightVector`.
+
+Hardware execution remains unverified.

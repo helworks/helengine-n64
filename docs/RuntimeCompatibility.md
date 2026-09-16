@@ -55,8 +55,13 @@ hooks use C linkage.
 ## Target constraints
 
 - 320x240, 16-bit color, double buffering, and a 16-bit depth surface.
-- Explicit `NO_LIGHT`, depth compare/write, `AA_NONE`, and back-face culling
-  for the default opaque material.
+- Lit materials draw with Tiny3D vertex lighting: the extracted ambient color
+  and up to seven directional lights are pushed with `t3d_light_set_ambient`,
+  `t3d_light_set_directional`, and `t3d_light_set_count` before the draw.
+  `NO_LIGHT` is applied only to `unlit` materials and to the built-in
+  diagnostic cube, whose vertex RGBA is its complete color source. Depth
+  compare/write, `AA_NONE`, and back-face culling apply to the default opaque
+  material in both cases.
 - One perspective camera and one 3D drawable are required at runtime.
 - Authored camera and drawable entities use layer mask `1`; scene loading
   preserves the serialized mask before camera queue filtering.
