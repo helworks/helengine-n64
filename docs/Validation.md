@@ -278,3 +278,60 @@ from the same generated workspace and booted again in Gopher64:
 - Four captures 300 ms apart (`out\frames-lit-final`) each differ inside the
   cube bounding box only (2.2% to 3.1% of window pixels per interval), so the
   packing refactor left the rendered output and rotation unchanged.
+
+## cube_test sprites
+
+Authoring, cooking and DragonFS staging are verified; the ROM is not, because
+the generated Core does not currently compile (see the blocker below).
+
+The demodisc `cube_test` scene no longer excludes the shared console
+camera/light instruction Blueprint on N64 (demodisc `88f8326`). The regenerated
+`assets/scenes/rendering/cube_test.helen` keeps only the `dc` existence override
+on that root, and the `CubeTestSun` directional light carries no override at
+all.
+
+Editor build (`C:\dev\helworks\builds\helengine-n64\cube-test\normal-build-sprites.log`),
+workspace `f07980c88b4a4bab985f2a0d1a5ab470`:
+
+- Runtime features: `render2d (AutoDetected)`, `sprites (AutoDetected)` enabled;
+  `text2d (ForcedDisabled)`.
+- All 32 builder-owned cook work items completed, ending with
+  `runtime-texture:cooked/fonts/default.hetex`.
+- 38 files, 536741 bytes staged into `builder\n64-dragonfs`, including 30
+  `cooked/imported/<hash>` textures and both cooked font atlases.
+
+The cooked scene carries exactly three `helengine.SpriteComponent` records, all
+with two positive `Size` axes, so no sprite falls back to its source rect on a
+single axis:
+
+| Entity | Cooked texture | Size | SourceRect |
+| --- | --- | --- | --- |
+| `CameraIconPrimary` | `cooked/imported/568d5f9c...` | 48x48 | 0.1406, 0.1406, 0.7227, 0.7227 |
+| `CameraIconSecondary` | `cooked/imported/34795cd0...` | 38x48 | 0.2109, 0.0781, 0.5820, 0.7275 |
+| `LightIcon` | `cooked/imported/cc1e9bd8...` | 46x46 | 0.2109, 0.2109, 0.5820, 0.5820 |
+
+Each of those three payloads is 16526 bytes: a 142-byte asset header plus
+64*64*4 straight RGBA32 bytes, confirming the max-64-pixel downscale cook.
+
+### Blocker: stale bundled codegen runtime support tree
+
+`scripts/build.ps1` fails compiling the generated Core with
+`'HeCppString' does not name a type` and `'he_cpp_raise' was not declared in
+this scope` across every `GeneratedRuntime*Deserializer` and the
+`runtime_*_manifest` sources. This is not sprite code:
+
+- helengine `828f3e6f` ("emit freestanding-safe generated runtime sources",
+  2026-09-15 21:34) makes the editor emit `HeCppString` and `he_cpp_raise`.
+- Those names are defined only by `runtime/native_runtime.hpp`, added by
+  csharpcodegen `78596e7` (2026-09-15 19:05), which the newer
+  `runtime/native_string.hpp` includes.
+- The editor invokes
+  `C:\dev\helworks\csharpcodegen\codegen\bin\Release\net9.0\codegen.exe`
+  (built 2026-09-15 18:25) and copies its bundled `.net.cpp` tree into the
+  generated Core. That bundled tree predates both commits: it has no
+  `native_runtime.hpp`, and its `native_string.hpp` does not include one.
+
+`cs2.cpp.csproj` copies `.net.cpp\**\*.*` with `CopyToOutputDirectory=Always`,
+so rebuilding csharpcodegen in Release refreshes the bundled tree. That rebuild
+was not performed here because csharpcodegen has uncommitted work from another
+session in its working tree.

@@ -105,6 +105,24 @@ DragonFS staging reads manifest-declared `cooked/...` paths from that package
 source root; the sibling workspace `cooked` directory remains the editor's
 cook output and is not the builder input root.
 
+The N64 codegen profile no longer forces `render2d` and `sprites` off, so a
+scene that carries authored `SpriteComponent`s auto-detects both features and
+the runtime renders them in a screen-space 2D pass after the Tiny3D 3D pass.
+`text2d` stays forced off, so authored `TextComponent`s and
+`RoundedRectComponent`s are still not drawn: an instruction overlay reaches an
+N64 ROM as its icons alone.
+
+The builder owns texture cooking for N64. Each declared cook work item is
+decoded (authored image files through the system decoder, editor-generated
+engine texture assets such as the platform font atlases through the asset
+serializer, chosen by the file's `HELE` magic bytes), box-filtered down to at
+most 64 pixels on its larger side, and written into `package-source` as
+straight RGBA32. The editor deliberately leaves builder-owned outputs out of
+the manifest's cooked artifacts, so staging copies the manifest artifacts and
+the builder's own cook outputs into `builder
+64-dragonfs`; staging the
+manifest alone would ship a ROM whose sprite textures are missing.
+
 The registered native executor passes `-Clean` to the Docker build wrapper so
 dependency files from an earlier generated Core profile cannot affect the
 authored unity compilation. The executor launches `pwsh`, so PowerShell 7 must
