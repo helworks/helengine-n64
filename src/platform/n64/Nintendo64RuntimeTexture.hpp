@@ -18,6 +18,9 @@ public:
     ~Nintendo64RuntimeTexture() override;
 
     /// Allocates the surface and converts the cooked straight-RGBA payload; returns false when the asset is unusable.
+    /// Any previously owned surface is released first, so a second call replaces the texture rather than leaking it;
+    /// an unusable asset is rejected before that release, leaving an already initialized texture untouched, while a
+    /// failed allocation leaves the texture uninitialized with `Surface()` null.
     bool Initialize(const ::TextureAsset* asset);
     /// Surface consumed by the RDP blitter, or null before initialization.
     const surface_t* Surface() const { return SurfaceInitialized ? &SurfaceValue : nullptr; }
