@@ -148,7 +148,13 @@ int Nintendo64RuntimeHost::Run() {
         }
         Video.Clear();
         EngineCore->Update(1.0 / 60.0);
+        // Core::Draw only runs the 3D render manager; RenderManager2D::Draw is a hook each host drives itself.
+        // The screen-space 2D pass therefore runs here, after the Tiny3D pass has queued its triangles and
+        // while the frame buffer is still attached, so the sprite blits land over the rendered 3D scene.
         EngineCore->Draw();
+        if (Render2D != nullptr) {
+            Render2D->Draw();
+        }
         if (!Video.EndFrame()) {
             Shutdown();
             return 1;
