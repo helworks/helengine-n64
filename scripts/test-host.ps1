@@ -90,3 +90,17 @@ $spriteRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
     'helengine-n64-build', './build/n64-sprite-geometry-tests')
 & docker @spriteRun
 if ($LASTEXITCODE -ne 0) { throw 'N64 sprite-geometry tests failed.' }
+
+$roundedRectCompile = @(
+    'run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', 'g++',
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-pedantic',
+    '-I.', 'tests/Nintendo64RoundedRectGeometryTests.cpp', 'src/platform/n64/Nintendo64RoundedRectGeometry.cpp',
+    '-o', 'build/n64-rounded-rect-geometry-tests'
+)
+& docker @roundedRectCompile
+if ($LASTEXITCODE -ne 0) { throw 'N64 rounded-rect-geometry test compilation failed.' }
+$roundedRectRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', './build/n64-rounded-rect-geometry-tests')
+& docker @roundedRectRun
+if ($LASTEXITCODE -ne 0) { throw 'N64 rounded-rect-geometry tests failed.' }
