@@ -606,3 +606,177 @@ The ROM hash differs from the previous one, which is expected: the generated
 Core is not byte-identical, so the compiled image cannot be. The ROM size is
 unchanged at 1589248 bytes, and every observable - trace, overlay pixels,
 rotation - reproduces.
+
+## cube_test on the newest shared code generator (2026-09-17)
+
+Re-verification only: no N64 source or runtime change. Since the ROM above was
+generated, csharpcodegen `master` advanced and the shared Release generator was
+rebuilt from it. Two generic changes now apply that the recorded Core predates:
+
+- `4f11363` "fix(cpp): bind delegates through the runtime instead of
+  `std::bind_front`"
+- `e47a165` "fix: keep a property's virtual modifier through the
+  expression-bodied path"
+
+Regenerated and rebuilt from `helengine-n64` `main` at `0123aa7`.
+
+- Shared generator: `C:\dev\helworks\csharpcodegen\codegen\bin\Release\net9.0\codegen.exe`,
+  csharpcodegen `master` `e47a165`
+- ROM: `C:\dev\helworks\builds\helengine-n64\cube-test\out\rom\helengine_n64_cube_test_newest_codegen.z64`
+- SHA-256: `58246706fb3b07ae62a3fcd1de013646f954a409bd4ca99b589fa78d97a7985e`
+- Bytes: `1589248` - the same size as the previous ROM, a different hash
+- Build workspace: `d0a8114bd20f4f66b07843b6ad35554e`
+- ELF load image: text `979320`, data `234237`, bss `10328`, total `1223885`
+  (previous: text `979352`, data `234177`, total `1223857` - `.text` shrank by
+  32 bytes and `.data` grew by 60, consistent with three getters gaining vtable
+  slots and the bind helper changing shape)
+
+The build ran the same way as the previous entry: the editor project build, then
+the native step separately because the editor's build executor launches `pwsh`,
+which is not on this machine's PATH. `libdragon` and `Tiny3D` are now git
+submodules under `.deps` at the pinned revisions `39d0d609` and `73d822f3`, so
+no manual dependency copy was needed. The native build ran with `-Clean` and
+completed with no errors; the only compiler diagnostics are the pre-existing
+`system/io/file-stream.cpp` maybe-uninitialized notes.
+
+The runtime feature manifest, the 32 cook work items and the DragonFS staging
+(38 files, 536741 bytes) are all identical to the previous build.
+
+### Boot trace
+
+`out\gopher-newest-codegen-stdout.log`, verbatim:
+
+```
+n64:authored-runtime-start
+n64:video-ready
+n64:renderer-ready
+n64:dragonfs-ready
+n64:core-ready
+n64:startup-scene id=cube_test
+n64:texture-loaded id=runtime-texture:cooked/imported/568d5f9ca3b6b3b30b85dfef3ca6746324806b161c8e79298069b4a50878468c size=64x64
+n64:texture-loaded id=runtime-texture:cooked/imported/34795cd0703804daa63e3f9eb76b7a644b1baaab10bcaadc6889f6791f257758 size=64x64
+n64:texture-loaded id=runtime-texture:cooked/fonts/demodiscbody.hetex size=64x64
+n64:texture-loaded id=runtime-texture:cooked/imported/cc1e9bd820dda8c73ad90fde92ee40595d67460755740c344e91130a22940f30 size=64x64
+n64:material-loaded id=Materials.rendering.cube_test.CubeTestSolid color=FFFFFFFF lit=1
+n64:model-loaded id=engine:model:cube vertices=24 indices=36
+n64:scene-ready cameras=1 drawables3d=1 drawables2d=6 directional=1 ambient=0
+n64:first-authored-draw model=engine:model:cube material=n64-standard lit=1 lights=1 calls=1
+n64:first-sprite-draw size=12x12 calls=1
+n64:first-frame-complete
+```
+
+`diff` against `out\gopher-shared-codegen-stdout.log` reports no differences: it
+is byte-for-byte the previous ROM's trace. Four `n64:texture-loaded` lines, the
+same `n64:scene-ready` counts, `n64:first-sprite-draw size=12x12 calls=1`,
+`n64:first-frame-complete`, and neither `n64:error` nor
+`n64:first-sprite-skipped` anywhere in stdout or stderr.
+
+### Frame evidence
+
+Eight captures 250 ms apart in `out\frames-newest-codegen`. Every consecutive
+pair differs and every difference bounding box lies inside the cube's bounding
+box (x 262-381, y 223-319):
+
+| Pair | Changed pixels | Share | Difference bbox |
+| --- | --- | --- | --- |
+| 1 -> 2 | 9568 | 3.1146% | 262, 223, 365, 319 |
+| 2 -> 3 | 872 | 0.2839% | 270, 225, 365, 319 |
+| 3 -> 4 | 2640 | 0.8594% | 262, 223, 361, 319 |
+| 4 -> 5 | 1098 | 0.3574% | 270, 223, 343, 319 |
+| 5 -> 6 | 512 | 0.1667% | 274, 223, 333, 319 |
+| 6 -> 7 | 7570 | 2.4642% | 262, 223, 380, 319 |
+| 7 -> 8 | 10304 | 3.3542% | 266, 223, 380, 319 |
+
+The per-pair counts differ from the previous run's, as they always do: the
+capture cadence is wall-clock and is not phase-locked to the spin. What matters
+is that no pair is identical, so no frame is frozen, and that every bbox stays
+inside the cube.
+
+Overlay-pixel check, counting pixels more than 12 in summed channel distance
+from the captured clear colour `(16, 16, 24)`, inside the emulator client area
+(x 9-633, y 31-479) and outside the cube bounding box:
+
+- all eight frames report **932** pixels, in the region x 23-68, y 365-424.
+
+That is the same count in the same region as the previous two ROMs, to the
+pixel, and it is confirmed here on every frame rather than on a sample of four.
+
+Read directly, frame 1 shows the cube at roughly 45 degrees with a bright left
+face and a dark right side wall, and the three icons in the lower left: a D-pad
+cross, a round analog stick beside it, and below them a dark round button
+carrying a red circle glyph. Frame 8 shows the cube rotated to nearly face-on, a
+flat mid-grey square with no visible side wall, while the three icons are
+pixel-identical and in the same place.
+
+### Regenerated Core differences
+
+Against the recorded workspace (`110a2a3cfd824828bc3040be7e04a32b`), the
+regenerated Core has the same 802 files, none added and none removed, and only
+six differ in content.
+
+**The delegate-binding change.** `runtime/native_runtime.hpp` gained
+`he_cpp_bind_front`, a two-argument bind helper. When the standard library
+advertises `__cpp_lib_bind_front >= 201907L` it forwards to `std::bind_front`;
+otherwise it returns a lambda capturing the callable and the receiver by value
+and calling `std::invoke(callable, bound, arguments...)`.
+
+`SceneManager.cpp` (5 sites) and `RuntimeSceneLoadOperation.cpp` (1 site) are
+the only call sites it touched. Each is a `new Action<T>(...)` construction over
+a pointer-to-member plus a receiver, and each swapped `std::bind_front(...)` for
+`he_cpp_bind_front(...)` with identical arguments. For example, in
+`SceneManager::SceneManager`:
+
+```cpp
+// before
+this->OwnedTextureTable = new ::SceneOwnedAssetReferenceTable_1<::RuntimeTexture*>(
+    "runtime texture",
+    new Action<RuntimeTexture*>(std::bind_front(
+        static_cast<void (SceneManager::*)(RuntimeTexture*)>(&SceneManager::ReleaseOwnedAsset), this)));
+
+// after
+this->OwnedTextureTable = new ::SceneOwnedAssetReferenceTable_1<::RuntimeTexture*>(
+    "runtime texture",
+    new Action<RuntimeTexture*>(he_cpp_bind_front(
+        static_cast<void (SceneManager::*)(RuntimeTexture*)>(&SceneManager::ReleaseOwnedAsset), this)));
+```
+
+No `std::bind_front` remains outside the helper. The N64 toolchain does
+advertise `__cpp_lib_bind_front`, so the helper takes the forwarding branch and
+the emitted behaviour is unchanged; the fallback exists for targets whose C++20
+library is incomplete.
+
+**Event subscription was not affected.** The obvious worry was
+`ViewportComponent`, which subscribes to `RenderManager3D::WindowResized` and is
+the component the instruction overlay in this ROM renders through. That path
+goes through `Event::Bind`, not `std::bind_front`, so it is untouched:
+`ViewportComponent.cpp` is byte-identical before and after, and line 398 reads
+the same in both Cores.
+
+```cpp
+this->OwnerCore->RenderManager3D->WindowResized += Event::Bind(this,
+    static_cast<void (ViewportComponent::*)(intptr_t, int32_t, int32_t)>(&ViewportComponent::HandleWindowResized));
+```
+
+The same holds for the other two `WindowResized` subscribers in this Core,
+`LayoutComponent` and `ReferenceCanvasFitComponent`. The delegate change reaches
+`Action<T>` construction from a receiver, not `+=`/`-=` on an `Event`.
+
+**The virtual-property change.** `Component.hpp` and `RenderManager3D.hpp` carry
+it: `Component::get_IsEditorUpdateExecutionSuppressionMarker`,
+`Component::get_IsEditorSceneCameraSuppressionMarker` and
+`RenderManager3D::get_LastDrawCallCount` gained `virtual`, restoring the
+modifier their expression-bodied C# declarations carry. No `.cpp` changed with
+them. This is behaviour-neutral here: the two marker getters have no call sites
+at all in the N64 Core, and every derived component that redeclares them does
+nothing but `return Component::get_...();` over a base that returns `false`, so
+making the dispatch virtual cannot change a result. `get_LastDrawCallCount` has
+no override in the Core, and its one caller, `Core.cpp:794`, reaches it through
+a concrete `RenderManager3D*`.
+
+`cpp-conversion-report.json` is the sixth differing file and differs only in the
+absolute workspace paths it records.
+
+The ROM hash differs from the previous one, which is expected: the generated
+Core is not byte-identical, so the compiled image cannot be. The ROM size is
+unchanged at 1589248 bytes, and every observable - trace, overlay pixels,
+rotation, icon art - reproduces exactly.
