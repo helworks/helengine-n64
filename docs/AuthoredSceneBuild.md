@@ -145,9 +145,33 @@ cook output and is not the builder input root.
 The N64 codegen profile no longer forces `render2d` and `sprites` off, so a
 scene that carries authored `SpriteComponent`s auto-detects both features and
 the runtime renders them in a screen-space 2D pass after the Tiny3D 3D pass.
-`text2d` stays forced off, so authored `TextComponent`s and
-`RoundedRectComponent`s are still not drawn: an instruction overlay reaches an
-N64 ROM as its icons alone.
+`text2d` stays forced off, so authored `TextComponent`s are still not drawn.
+
+Authored `RoundedRectComponent`s now have their fill drawn. The screen-space
+resolve lives in `Nintendo64RoundedRectGeometry`, a pure host-tested seam that
+multiplies the authored size by the parent scale on each axis, scales the radius
+by the smaller of the two factors and clamps it to half the smaller resolved
+side. The ring itself is not reimplemented here: `DrawRoundedRect` calls the
+generated Core's `RoundedRectGeometryBuilder::BuildFillRingVertices`, which
+returns 32 segments as centre/boundary/boundary triples, and hands each triple
+to `rdpq_triangle` with the predefined `TRIFMT_FILL` format. `TRIFMT_FILL`
+carries position only, so the triangles run under `RDPQ_COMBINER_FLAT` with the
+shape's `FillColor` as the primitive colour; the pass otherwise leaves the
+combiner on `RDPQ_COMBINER_TEX_FLAT` for sprites, and `DrawRoundedRect` restores
+it before returning because the ordered queue can put a sprite straight after a
+rectangle.
+
+Fill is all that is drawn. `BorderColor` and `BorderThickness` are ignored, so a
+bordered shape renders as its fill alone, and the texture-modulation fields
+`Color` and `SourceRect` are ignored too - the fill is flat, never a tinted
+nine-slice. A non-zero `Rotation` is refused rather than drawn unrotated: the
+runtime traces `n64:error rounded-rect-rotation` and throws
+`NotSupportedException`. There is no blending in this pass, so a `FillColor`
+with a partial alpha draws fully opaque; `cube_test`'s instruction panel is
+authored at alpha 224 and reaches the frame buffer solid.
+
+An instruction overlay therefore reaches an N64 ROM as its panel and its icons,
+without its labels.
 
 `Core::Draw` only drives the 3D render manager. `RenderManager2D::Draw` is a
 hook each host calls for itself, so the N64 runtime host runs the 2D pass right

@@ -780,3 +780,139 @@ The ROM hash differs from the previous one, which is expected: the generated
 Core is not byte-identical, so the compiled image cannot be. The ROM size is
 unchanged at 1589248 bytes, and every observable - trace, overlay pixels,
 rotation, icon art - reproduces exactly.
+
+## Rounded-rectangle fill in the 2D pass (2026-09-17)
+
+The second 2D step: `RenderManager2D::DrawRoundedRect` no longer returns without
+drawing. Sprites shipped two entries above; text is still a stub.
+
+### Build
+
+No code generation was re-run. Nothing that feeds codegen changed - only
+`src/platform/n64` and the host test suite - so the ROM was built against the
+same workspace the previous entry recorded, `d0a8114bd20f4f66b07843b6ad35554e`,
+which isolates the render change from any generator drift.
+
+- Host tests: all seven suites pass, the seventh being the new
+  `n64-rounded-rect-geometry-tests`
+- Native build: `scripts/build.ps1 -Clean -Mode authored` against that
+  workspace's `generated-core` and `builder\n64-dragonfs`, no errors; the only
+  diagnostics are the pre-existing `file-stream.cpp` maybe-uninitialized notes
+  and the generated-Core `delete-non-virtual-dtor` warnings
+- ROM: `out\rom\helengine_n64_cube_test_rounded_rect.z64`
+- SHA-256: `1be5f494ea50cd3c9bf4b4d3f0be3be09cd955569e8dfa1a562659cd1dd42246`
+- Bytes: `1589248`, unchanged
+- ELF load image: text `982392`, data `235029`, bss `10328`, total `1227749`
+  (previous: text `979320`, data `234237`, total `1223885`)
+
+### Which rounded rectangle this scene actually contains
+
+Worth recording, because it is not the one an inspection of the authored
+`.helen` suggests. `assets/scenes/rendering/cube_test.helen` carries seven
+`RoundedRectComponent`s, including `DemoDiscLightIndicatorSwatch` at (122, 73)
+with `Size` 32x32 and `Radius` 2. That entity carries a platform exclusion list
+naming `3ds`, `dc`, `ds` and `n64`, so it does not survive the cook: the cooked
+N64 scene (`builder\n64-dragonfs\cooked\scenes\rendering\cube_test.hasset`,
+7.1 KB) contains exactly one `RoundedRectComponent`, three `SpriteComponent`s
+and two `TextComponent`s - the six drawables `n64:scene-ready` reports.
+
+The one rounded rectangle that does ship is
+`ConsoleCameraLightInstructionsPanel`, the background of the instruction
+overlay: entity position (24, 528), `Size` 345x150, `Radius` 8, `FillColor`
+(20, 24, 32, 224), `BorderColor` (120, 140, 170, 255), `BorderThickness` 2,
+`RenderOrder2D` 200. The three icon sprites are its children at render order
+201, so the panel is drawn immediately before them every frame.
+
+### Boot trace
+
+`out\gopher-rounded-rect-stdout.log`, verbatim:
+
+```
+n64:authored-runtime-start
+n64:video-ready
+n64:renderer-ready
+n64:dragonfs-ready
+n64:core-ready
+n64:startup-scene id=cube_test
+n64:texture-loaded id=runtime-texture:cooked/imported/568d5f9ca3b6b3b30b85dfef3ca6746324806b161c8e79298069b4a50878468c size=64x64
+n64:texture-loaded id=runtime-texture:cooked/imported/34795cd0703804daa63e3f9eb76b7a644b1baaab10bcaadc6889f6791f257758 size=64x64
+n64:texture-loaded id=runtime-texture:cooked/fonts/demodiscbody.hetex size=64x64
+n64:texture-loaded id=runtime-texture:cooked/imported/cc1e9bd820dda8c73ad90fde92ee40595d67460755740c344e91130a22940f30 size=64x64
+n64:material-loaded id=Materials.rendering.cube_test.CubeTestSolid color=FFFFFFFF lit=1
+n64:model-loaded id=engine:model:cube vertices=24 indices=36
+n64:scene-ready cameras=1 drawables3d=1 drawables2d=6 directional=1 ambient=0
+n64:first-authored-draw model=engine:model:cube material=n64-standard lit=1 lights=1 calls=1
+n64:first-rounded-rect-draw size=86x38 radius=200/100 verts=96
+n64:first-sprite-draw size=12x12 calls=1
+n64:first-frame-complete
+```
+
+Every baseline line is unchanged: four `n64:texture-loaded`, the same
+`n64:scene-ready` counts, `n64:first-sprite-draw size=12x12 calls=1`,
+`n64:first-frame-complete`, and no `n64:error` and no `-skipped` line anywhere
+in stdout or stderr. The one new line is the rounded-rect trace, and it reports
+the resolve exactly: 345x150 at the viewport's quarter scale is 86.25 by 37.5,
+which rounds to 86x38, the radius resolves to 2.00 pixels, and 32 ring segments
+produce 96 vertices.
+
+`n64:first-rounded-rect-draw` precedes `n64:first-sprite-draw` because the panel
+sits at render order 200 and the icons at 201, which is the ordering this
+feature most needed to survive.
+
+### Frame evidence
+
+Overlay-pixel check, counted the same way as the previous entry: pixels more
+than 12 in summed channel distance from the clear colour `(16, 16, 24)`, inside
+the emulator client area (x 9-633, y 31-479) and outside the cube bounding box
+(x 262-381, y 223-319).
+
+| ROM | Overlay pixels | Region |
+| --- | --- | --- |
+| previous (`_newest_codegen`), booted here for the comparison | 932 | x 23-68, y 365-424 |
+| this one | 12282 | x 13-183, y 357-430 |
+
+The previous ROM reproduced its recorded 932 exactly, on two captures, so the
+two numbers are comparable. The increase is the panel: 86x38 frame-buffer pixels
+upscale to roughly 168x74 in the 640x480 window, and the measured region is 171
+by 74 at the lower left, wrapping the icons that used to sit on the clear colour
+alone.
+
+This is a change to the recorded baseline figure, and an intended one - a
+previously undrawn authored shape is now drawn - but it is not a change to the
+icons. Of the 1516 pixels the icons drew over the clear colour in the previous
+ROM, 1370 are byte-identical in the new one; the 146 that differ are all edge
+pixels of the emulator's upscale filter, each shifted by 4 in green and blue,
+exactly the difference between blending an icon edge against `(16, 16, 24)` and
+against the panel's `(16, 24, 32)`. Counting pixels far from both the clear
+colour and the panel fill - that is, the icon art itself - gives 1122 in both
+ROMs.
+
+Cube motion is unaffected. Four captures 400 ms apart differ pairwise by 1186,
+776 and 10338 pixels, and every difference bounding box - (262, 223, 380, 319),
+(262, 223, 380, 319), (262, 223, 377, 319) - lies inside the cube's.
+
+Read directly, frame 1 shows the cube at roughly 45 degrees with a bright left
+face and a dark right side wall, and at the lower left a dark rounded-corner
+panel carrying the three icons: a D-pad cross, a round analog stick beside it,
+and below them a dark round button with a red glyph. Frame 4 shows the cube
+rotated nearly face-on, a flat mid-grey square with no side wall, while the
+panel and the three icons are unchanged. A 4x crop of the panel shows the
+corners clipped on all four sides, which is the two-pixel radius resolving as
+the geometry seam reports it.
+
+### Combiner restore
+
+The restore to `RDPQ_COMBINER_TEX_FLAT` after the triangles is what keeps the
+sprites correct, and this scene tests it directly rather than by inspection: the
+panel is drawn immediately before the three icon sprites in the same pass, every
+frame. Without the restore the icons would have rasterized as flat 12x12 blocks
+of the panel's primitive colour, because `RDPQ_COMBINER_FLAT` ignores TEX0. They
+render their art, pixel-identical to the previous ROM as counted above.
+
+### Not implemented in this step
+
+`BorderColor` and `BorderThickness` are ignored, so this panel's two-pixel
+`(120, 140, 170)` border is absent and the shape is its fill alone. `Color` and
+`SourceRect` are ignored. The pass does no blending, so the panel's authored
+alpha of 224 reaches the frame buffer opaque - the clear colour behind it does
+not show through.
