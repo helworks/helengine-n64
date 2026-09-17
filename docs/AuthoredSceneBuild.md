@@ -6,14 +6,16 @@ missing. Diagnostic mode remains available with `-Mode diagnostic`.
 
 ## Toolchain prerequisite
 
-N64 currently requires a C++ code generator built from csharpcodegen commit
-`b477b70` or later, which is the first to emit `runtime/native_runtime.hpp`. The
-shared `csharpcodegen\codegen\bin\Release` executable is stale and does not
-contain it; generating the N64 Core against that build produces a tree that
-fails to compile with `'HeCppString' does not name a type`. The working setup -
-an isolated master worktree registered for the `n64` platform row only - is
-recorded in `docs/Validation.md`. Check this before reading a native compile
-failure as a problem with the authored scene.
+N64 requires a C++ code generator built from csharpcodegen commit `b477b70` or
+later, which is the first to emit `runtime/native_runtime.hpp`. The shared
+`csharpcodegen\codegen\bin\Release` executable satisfies that: it has been
+rebuilt from csharpcodegen `master` `c3c0521` and carries both
+`runtime/native_runtime.hpp` and `runtime/native_endian.hpp`. No privately built
+generator is needed - the `n64` platform row points at the shared executable,
+and `docs/Validation.md` records a full regenerate, rebuild and boot against it.
+If a native compile does fail with `'HeCppString' does not name a type`, the
+shared build has gone stale again; check that before reading the failure as a
+problem with the authored scene.
 
 The editor the recorded ROM was generated with also carried helengine commit
 `c0157e99`, the null-guard on the draw-timing path. That commit has since landed

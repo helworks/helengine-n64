@@ -437,6 +437,172 @@ regenerated Core has 800 files instead of 807:
 This ROM was produced with an isolated csharpcodegen master worktree at
 `C:\dev\helworks\builds\helengine-n64\codegen-master` (`b477b70`), registered
 for the `n64` platform row only. The shared
-`csharpcodegen\codegen\bin\Release` output remains a day stale and still lacks
-`runtime/native_runtime.hpp`; building N64 against it fails with
-`'HeCppString' does not name a type`.
+`csharpcodegen\codegen\bin\Release` output was a day stale at the time and
+lacked `runtime/native_runtime.hpp`; building N64 against it failed with
+`'HeCppString' does not name a type`. That gap is closed - the shared
+executable has since been rebuilt and the ROM reproduces against it, as
+recorded in the next section.
+
+## cube_test on the shared code generator
+
+The reproducibility gap above is closed. The shared
+`C:\dev\helworks\csharpcodegen\codegen\bin\Release\net9.0\codegen.exe` was
+rebuilt from csharpcodegen `master` at `c3c0521` and now carries both
+`runtime/native_runtime.hpp` and `runtime/native_endian.hpp`. The `n64` platform
+row in `C:\dev\helworks\helengine\user_settings\platforms.json` points at that
+executable and at the merged `C:\dev\helworks\helengine-n64` checkout, so N64 no
+longer needs a privately built generator. Regenerated and rebuilt from
+`helengine-n64` `main` at `09f8a4c`.
+
+- Shared generator: `C:\dev\helworks\csharpcodegen\codegen\bin\Release\net9.0\codegen.exe`,
+  csharpcodegen `master` `c3c0521`
+- ROM: `C:\dev\helworks\builds\helengine-n64\cube-test\out\rom\helengine_n64_cube_test_shared_codegen.z64`
+- SHA-256: `7e8fa1e44fd9b106f91b7ba85f52a41e7e15fe5bb443bec8bb3bfce6fec00fad`
+- Bytes: `1589248` - the same size as the previous ROM, a different hash
+- Build workspace: `110a2a3cfd824828bc3040be7e04a32b`
+- ELF load image: text `979352`, data `234177`, bss `10328`, total `1223857`
+
+The build ran as the normal editor project build; the native step was run
+separately because the editor's build executor launches `pwsh`, which is not on
+this machine's PATH:
+
+```powershell
+$env:HELENGINE_N64_REPOSITORY_ROOT = 'C:\dev\helworks\helengine-n64'
+$env:HELENGINE_BUILD_WORKSPACE_ROOT = 'C:\dev\helworks\builds\helengine-n64\cube-test\work'
+dotnet C:\dev\helworks\helengine\helengine.ui\helengine.editor.app\bin\Debug\net9.0-windows\helengine.editor.app.dll `
+  --project C:\dev\helprojs\demodisc\project.heproj `
+  --build n64 --build-profile release `
+  --output C:\dev\helworks\builds\helengine-n64\cube-test\editor-output
+
+pwsh -NoProfile -File scripts/build.ps1 -Clean -Mode authored `
+  -GeneratedCoreRoot ...\work\n64\110a2a3cfd824828bc3040be7e04a32b\generated-core `
+  -FilesystemRoot ...\work\n64\110a2a3cfd824828bc3040be7e04a32b\builder\n64-dragonfs
+```
+
+The merged checkout had no `.deps`, which is gitignored, so the first native run
+stopped on `Pinned dependencies are missing`. The libdragon and tiny3d checkouts
+were copied in from `helengine-n64-impl` at exactly the revisions
+`dependencies.json` pins (`39d0d609`, `73d822f3`).
+
+The runtime feature manifest is unchanged from the previous ROM:
+
+```
+Enabled runtime features: render2d (AutoDetected), sprites (AutoDetected). Disabled runtime features: debug_overlay (ForcedDisabled), host_file_system (NotIncluded), managed_metadata_only (ForcedDisabled), physics3d.diagnostics (NotIncluded), reflection_like_runtime (NotIncluded), shaders (ForcedDisabled), text2d (ForcedDisabled), text_processing (NotIncluded).
+```
+
+All 32 cook work items completed and DragonFS staging wrote 38 files and 536741
+bytes, both identical to the previous build.
+
+### Boot trace
+
+`out\gopher-shared-codegen-stdout.log`, verbatim:
+
+```
+n64:authored-runtime-start
+n64:video-ready
+n64:renderer-ready
+n64:dragonfs-ready
+n64:core-ready
+n64:startup-scene id=cube_test
+n64:texture-loaded id=runtime-texture:cooked/imported/568d5f9ca3b6b3b30b85dfef3ca6746324806b161c8e79298069b4a50878468c size=64x64
+n64:texture-loaded id=runtime-texture:cooked/imported/34795cd0703804daa63e3f9eb76b7a644b1baaab10bcaadc6889f6791f257758 size=64x64
+n64:texture-loaded id=runtime-texture:cooked/fonts/demodiscbody.hetex size=64x64
+n64:texture-loaded id=runtime-texture:cooked/imported/cc1e9bd820dda8c73ad90fde92ee40595d67460755740c344e91130a22940f30 size=64x64
+n64:material-loaded id=Materials.rendering.cube_test.CubeTestSolid color=FFFFFFFF lit=1
+n64:model-loaded id=engine:model:cube vertices=24 indices=36
+n64:scene-ready cameras=1 drawables3d=1 drawables2d=6 directional=1 ambient=0
+n64:first-authored-draw model=engine:model:cube material=n64-standard lit=1 lights=1 calls=1
+n64:first-sprite-draw size=12x12 calls=1
+n64:first-frame-complete
+```
+
+This is byte-for-byte the trace the previous ROM produced: same four
+`n64:texture-loaded` lines with the same ids, the same `n64:scene-ready` counts,
+the same `n64:first-sprite-draw size=12x12 calls=1`, `n64:first-frame-complete`,
+and neither `n64:error` nor `n64:first-sprite-skipped`. Asset loading is
+therefore unaffected by the byte-order change, which is what the
+`EngineBinaryReader` design predicts.
+
+### Frame evidence
+
+Eight captures 250 ms apart in `out\frames-shared-codegen`. Every consecutive
+pair differs and every difference bounding box lies inside the cube's bounding
+box (x 262-381, y 223-319), so the cube still rotates and the overlay is static:
+
+| Pair | Changed pixels | Share | Difference bbox |
+| --- | --- | --- | --- |
+| 1 -> 2 | 580 | 0.1888% | 264, 225, 353, 319 |
+| 2 -> 3 | 2490 | 0.8105% | 262, 223, 353, 319 |
+| 3 -> 4 | 12 | 0.0039% | 280, 315, 309, 319 |
+| 4 -> 5 | 1940 | 0.6315% | 262, 223, 349, 319 |
+| 5 -> 6 | 2140 | 0.6966% | 264, 225, 363, 319 |
+| 6 -> 7 | 1360 | 0.4427% | 270, 225, 369, 319 |
+| 7 -> 8 | 9934 | 3.2337% | 262, 223, 369, 319 |
+
+The per-pair counts are lower than the previous run's and pair 3 -> 4 changed
+only 12 pixels. Neither is a regression: the capture cadence is wall-clock and
+is not phase-locked to the spin, so consecutive captures can land closer
+together in the rotation than they did before. What matters is that no pair is
+identical, so no frame is frozen, and that every bbox stays inside the cube.
+
+Overlay-pixel check, counting pixels more than 12 in summed channel distance
+from the captured clear colour `(16, 16, 24)`, inside the emulator client area
+(x 9-633, y 31-479) and outside the cube bounding box:
+
+- frames 1, 2, 5 and 8 each report **932** pixels, in the region
+  x 23-68, y 365-424.
+
+That is the same count in the same region as the previous ROM, to the pixel.
+
+Read directly, frame 1 shows the cube at roughly 45 degrees with a bright left
+face and a dark right face, and the three icons in the lower left: a D-pad
+cross, a round analog stick beside it, and below them a dark round button
+carrying a red circle glyph. Frame 8 shows the cube rotated further, with a
+wider dark side wall, while the three icons are pixel-identical and in the same
+place. The button art is still the PS2 baseline, unchanged and expected.
+
+### Regenerated Core differences
+
+Against the previous workspace (`22ca7b9ba847446c9270e583a1079321`), the
+regenerated Core has one more file, 801 versus 800 counting sources and headers:
+
+- **Added (1):** `runtime/native_endian.hpp`, from csharpcodegen `8ae4e55`.
+- **Removed:** none.
+- **Size-changed (56):** four carry the real changes, the rest are noise.
+  - `system/io/binary-reader.cpp` and `system/io/binary-writer.cpp` replaced the
+    `std::reverse`-when-big-endian branch with
+    `he_cpp_endian::NeedsSwap(littleEndian)`, which swaps only when the wire and
+    host orders disagree. On this big-endian target reading little-endian cooked
+    data the two disagree, so the generated reader now swaps where it previously
+    copied straight through. Nothing in the boot path notices, because cooked
+    assets go through the engine's `EngineBinaryReader` and its
+    `BinaryReaderBE`/`BinaryReaderLE` subclasses, which assemble values byte by
+    byte and never call the generated `BinaryReader::Read<T>`.
+  - `system/bit_converter.hpp` gained `BitConverter::IsLittleEndian`, a
+    `constexpr` constant with no call sites here.
+  - `CameraComponent`, `CameraProjectionUtils` and `ICamera` gained a field of
+    view clamp and a `CreatePerspectiveProjection(camera, aspectRatio)`
+    overload. That is a helengine source change, not a codegen difference, and
+    it is behaviour-neutral for this scene because the authored field of view is
+    inside the clamp range.
+  - The remaining ~49 files shrank by a handful of bytes each. These are the
+    static runtime support headers the generator copies verbatim; the shared
+    Release build emits them with LF line endings where the worktree build
+    emitted CRLF. No content change.
+- **The hash-lowering change is a no-op for this Core.** csharpcodegen `7d6a245`
+  routes an inherited `object.GetHashCode()` through `he_cpp_get_hash_code`, but
+  the helper appears in exactly the same three files with the same counts before
+  and after (`FiniteStateTransitionKey_1.cpp` twice, `runtime/native_hash.hpp`
+  and `runtime/native_hash_set.hpp` once each), so no call site in the N64 Core
+  was affected.
+
+`runtime/native_endian.hpp` as emitted derives the host order from
+`__BYTE_ORDER__` alone and carries no `static_assert` against
+`HE_CPP_PLATFORM_IS_LITTLE_ENDIAN`, confirming csharpcodegen `d8ad75d` is in the
+shared build. Without it this configuration - a big-endian CPU declaring
+little-endian serialization - would have failed the build on that assert.
+
+The ROM hash differs from the previous one, which is expected: the generated
+Core is not byte-identical, so the compiled image cannot be. The ROM size is
+unchanged at 1589248 bytes, and every observable - trace, overlay pixels,
+rotation - reproduces.
