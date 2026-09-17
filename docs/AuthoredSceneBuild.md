@@ -187,7 +187,13 @@ authored unity compilation. The executor launches `pwsh`, so PowerShell 7 must
 be on the editor process PATH; when it is not, generation and staging still
 complete and the native step can be rerun with an explicit `pwsh.exe` path
 against the finalized `generated-core` and `builder\n64-dragonfs` directories
-of the newest workspace under `HELENGINE_BUILD_WORKSPACE_ROOT\n64`.
+of the workspace the build just produced.
+
+Do not pick that workspace by newest write time alone. A build can leave a
+second, later directory holding only generated-dotnet, so the newest entry is
+not always the one that was built. Select the newest directory that actually
+contains a generated-core subdirectory, and confirm the staged filesystem
+directory is present beside it before using it.
 
 After changing the N64 builder source, rebuild the registered builder assembly
 without rebuilding its already available HelEngine references:
