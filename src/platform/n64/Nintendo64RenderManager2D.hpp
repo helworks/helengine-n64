@@ -20,7 +20,8 @@ public:
     ::RuntimeTexture* BuildTextureFromCooked(std::string cookedAssetPath, ::IContentStreamSource* contentStreamSource) override;
     /// Runs the screen-space 2D pass after the 3D pass for the first authored camera.
     void Draw() override;
-    /// Rounded rectangles are not part of the authored N64 2D feature set yet, so drawing one does nothing.
+    /// Draws the fill of one authored rounded rectangle as a flat-coloured screen-space triangle fan. Only
+    /// the fill is drawn: the border fields and the texture-modulation fields are not honoured yet.
     void DrawRoundedRect(::IRoundedRectDrawable2D* shape) override;
     /// Draws one authored sprite as a textured screen-space rectangle.
     void DrawSprite(::ISpriteDrawable2D* sprite) override;
@@ -42,6 +43,12 @@ private:
     /// True once the first sprite skipped for a zero-area destination has been traced, so
     /// `n64:first-sprite-skipped` is emitted exactly once instead of every frame the degenerate sprite is queued.
     bool HasLoggedSkippedSprite = false;
+    /// True once the first rounded-rectangle fill of the run has been traced, so `n64:first-rounded-rect-draw`
+    /// is emitted exactly once.
+    bool HasLoggedRoundedRectDraw = false;
+    /// True once the first rounded rectangle skipped for a zero-area destination has been traced, so
+    /// `n64:first-rounded-rect-skipped` is emitted exactly once instead of every frame the empty shape is queued.
+    bool HasLoggedSkippedRoundedRect = false;
 };
 
 } // namespace helengine::n64

@@ -13,11 +13,14 @@
 #include "IContentStreamSource.hpp"
 #include "IDrawable2D.hpp"
 #include "IRenderQueue2D.hpp"
+#include "IRoundedRectDrawable2D.hpp"
 #include "ISpriteDrawable2D.hpp"
 #include "ObjectManager.hpp"
+#include "RoundedRectGeometryBuilder.hpp"
 #include "RuntimeTexture.hpp"
 #include "TextureAsset.hpp"
 #include "byte4.hpp"
+#include "float2.hpp"
 #include "float3.hpp"
 #include "float4.hpp"
 #include "int2.hpp"
@@ -27,11 +30,18 @@
 #include "runtime/native_list.hpp"
 #include "system/io/stream.hpp"
 
+#include "platform/n64/Nintendo64RoundedRectGeometry.hpp"
 #include "platform/n64/Nintendo64RuntimeTexture.hpp"
 #include "platform/n64/Nintendo64SpriteGeometry.hpp"
 
 namespace helengine::n64 {
 namespace {
+
+/// Number of equal-angle segments the rounded-rect fill ring is split into.  This matches the eight segments
+/// per corner the DirectX 11 renderer uses, so a shape authored against the desktop preview keeps the same
+/// silhouette here; at 32 triangles per rectangle it is also well inside what the RDP swallows for the
+/// handful of overlay shapes an authored N64 scene carries.
+constexpr int32_t kRoundedRectRingSteps = 32;
 
 /// Tolerance used when deciding whether an entity orientation is the identity quaternion.  Authored
 /// quaternions arrive as cooked floats, so an exact comparison would reject sprites that are visually
@@ -130,7 +140,93 @@ void Nintendo64RenderManager2D::Draw() {
     camera->get_RenderQueue2D()->VisitOrdered(this);
 }
 
-void Nintendo64RenderManager2D::DrawRoundedRect(::IRoundedRectDrawable2D*) {
+void Nintendo64RenderManager2D::DrawRoundedRect(::IRoundedRectDrawable2D* shape) {
+    if (shape == nullptr || shape->get_Parent() == nullptr) {
+        return;
+    }
+    ::Entity* parent = shape->get_Parent();
+    if (shape->get_Rotation() != 0.0f) {
+        // Same reasoning as the sprite path: an unhandled native exception inside the frame loop stops the
+        // ROM with nothing on the debug channel, so name the reason before going down.  The fill ring is
+        // built in screen space and has nowhere to carry a rotation, and drawing it unrotated would be
+        // silently wrong.
+        debugf("n64:error rounded-rect-rotation\n");
+        throw new NotSupportedException("N64 rounded rectangles do not support rotation.");
+    }
+
+    // The host-tested seam owns every number that decides the shape; this function only reads the authored
+    // component fields and turns the resolved ring into RDP calls.
+    const ::int2 authoredSize = shape->get_Size();
+    const ::float3 scale = parent->get_Scale();
+    const Nintendo64RoundedRectFillGeometry geometry = Nintendo64RoundedRectGeometry::Resolve(
+        authoredSize.X, authoredSize.Y, shape->get_Radius(), scale.X, scale.Y);
+    if (geometry.Kind == Nintendo64RoundedRectGeometryKind::EmptyDestination) {
+        // Trace it once, for the same reason the sprite path does: from an emulator log a silently skipped
+        // rectangle is indistinguishable from one that never reached the render queue at all.
+        if (!HasLoggedSkippedRoundedRect) {
+            debugf("n64:first-rounded-rect-skipped reason=empty-size size=%ldx%ld\n",
+                   static_cast<long>(Nintendo64RoundedRectGeometry::RoundToInt(geometry.DestinationWidth)),
+                   static_cast<long>(Nintendo64RoundedRectGeometry::RoundToInt(geometry.DestinationHeight)));
+            HasLoggedSkippedRoundedRect = true;
+        }
+        return;
+    }
+
+    // The authored position is the top-left corner, but the ring builder works from the centre.  Round the
+    // corner onto a whole pixel exactly as the sprite blit does, so a rectangle and an icon authored on the
+    // same reference-canvas grid still line up once the viewport downscale leaves them on half pixels.
+    const ::float3 position = parent->get_Position();
+    const float left = static_cast<float>(Nintendo64RoundedRectGeometry::RoundToInt(position.X));
+    const float top = static_cast<float>(Nintendo64RoundedRectGeometry::RoundToInt(position.Y));
+    ::RoundedRectGeometryBuilder builder;
+    ::Array<::float2>* vertices = builder.BuildFillRingVertices(
+        kRoundedRectRingSteps,
+        geometry.DestinationWidth,
+        geometry.DestinationHeight,
+        geometry.Radius,
+        left + geometry.DestinationWidth * 0.5f,
+        top + geometry.DestinationHeight * 0.5f);
+    if (vertices == nullptr) {
+        throw new InvalidOperationException("N64 rounded-rect fill ring builder returned no vertices.");
+    }
+
+    // The 2D pass leaves the combiner on RDPQ_COMBINER_TEX_FLAT for sprites, which samples TEX0 and would
+    // read whatever tile the last blit happened to leave loaded.  TRIFMT_FILL supplies position only, so the
+    // triangles need the flat combiner that outputs the primitive colour and nothing else.  The queue is
+    // ordered, a sprite can follow a rectangle, and every state change here has to be undone before
+    // returning - hence the restore below rather than a reset at the top of DrawSprite.
+    rdpq_mode_combiner(RDPQ_COMBINER_FLAT);
+    const ::byte4 fillColor = shape->get_FillColor();
+    rdpq_set_prim_color(RGBA32(fillColor.X, fillColor.Y, fillColor.Z, fillColor.W));
+
+    // BuildFillRingVertices returns one triangle per ring segment, laid out as centre, boundary, boundary.
+    const int32_t vertexCount = vertices->Length;
+    for (int32_t index = 0; index + 2 < vertexCount; index += 3) {
+        const ::float2& center = (*vertices)[index];
+        const ::float2& first = (*vertices)[index + 1];
+        const ::float2& second = (*vertices)[index + 2];
+        const float centerVertex[2] = {center.X, center.Y};
+        const float firstVertex[2] = {first.X, first.Y};
+        const float secondVertex[2] = {second.X, second.Y};
+        rdpq_triangle(&TRIFMT_FILL, centerVertex, firstVertex, secondVertex);
+    }
+    delete vertices;
+
+    // Hand the pipeline back exactly as it was found, so a sprite queued after this rectangle blits with the
+    // textured combiner the 2D pass set up rather than a flat primitive colour.
+    rdpq_mode_combiner(RDPQ_COMBINER_TEX_FLAT);
+
+    // DrawCallCount deliberately stays a sprite-blit counter.  It is reported by n64:first-sprite-draw, and
+    // counting rectangles into it would make that line's value depend on the render order of unrelated
+    // overlay shapes rather than on the sprites it describes.
+    if (!HasLoggedRoundedRectDraw) {
+        debugf("n64:first-rounded-rect-draw size=%ldx%ld radius=%ld/100 verts=%ld\n",
+               static_cast<long>(Nintendo64RoundedRectGeometry::RoundToInt(geometry.DestinationWidth)),
+               static_cast<long>(Nintendo64RoundedRectGeometry::RoundToInt(geometry.DestinationHeight)),
+               static_cast<long>(Nintendo64RoundedRectGeometry::RoundToInt(geometry.Radius * 100.0f)),
+               static_cast<long>(vertexCount));
+        HasLoggedRoundedRectDraw = true;
+    }
 }
 
 void Nintendo64RenderManager2D::DrawSprite(::ISpriteDrawable2D* sprite) {
