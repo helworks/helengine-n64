@@ -1,0 +1,6 @@
+[submodule ".deps/libdragon"]
+	path = .deps/libdragon
+	url = https://github.com/DragonMinded/libdragon.git
+[submodule ".deps/tiny3d"]
+	path = .deps/tiny3d
+	url = https://github.com/HailToDodongo/tiny3d.git

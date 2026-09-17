@@ -25,35 +25,18 @@ function Invoke-Native([string]$FilePath, [string[]]$Arguments, [string]$Working
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 New-Item -ItemType Directory -Force -Path $deps | Out-Null
 
-function Ensure-PinnedCheckout([string]$Path, [string]$Url, [string]$Revision, [string]$Branch) {
+function Assert-SubmoduleCheckout([string]$Path, [string]$Name) {
     if (-not (Test-Path -LiteralPath (Join-Path $Path '.git'))) {
-        if (Test-Path -LiteralPath $Path) {
-            throw "Refusing to overwrite non-git dependency directory: $Path"
-        }
-        Invoke-Native 'git' @('clone', '--branch', $Branch, $Url, $Path) $root
+        throw "Submodule '$Name' is not checked out at $Path. Run: git submodule update --init --recursive"
     }
-
-    $origin = (& git -C $Path remote get-url origin).Trim()
-    if ($LASTEXITCODE -ne 0 -or $origin -ne $Url) {
-        throw "Dependency origin mismatch for $Path. Expected $Url, got $origin"
-    }
-    $head = (& git -C $Path rev-parse HEAD).Trim()
     $dirty = (& git -C $Path status --porcelain | Out-String).Trim()
     if ($dirty -and -not $Force) {
-        throw "Dependency checkout is locally modified; use -Force only after reviewing it: $Path"
-    }
-    if ($head -ne $Revision) {
-        Invoke-Native 'git' @('fetch', '--depth', '1', 'origin', $Revision) $Path
-        Invoke-Native 'git' @('checkout', '--detach', $Revision) $Path
-    }
-    $verified = (& git -C $Path rev-parse HEAD).Trim()
-    if ($verified -ne $Revision) {
-        throw "Pinned revision verification failed for $Path"
+        throw "Submodule checkout is locally modified; use -Force only after reviewing it: $Path"
     }
 }
 
-Ensure-PinnedCheckout $libdragon $manifest.libdragon.repository $manifest.libdragon.revision $manifest.libdragon.branch
-Ensure-PinnedCheckout $tiny3d $manifest.tiny3d.repository $manifest.tiny3d.revision $manifest.tiny3d.branch
+Assert-SubmoduleCheckout $libdragon 'libdragon'
+Assert-SubmoduleCheckout $tiny3d 'tiny3d'
 
 $baseImage = $manifest.toolchain.baseImage
 if ($baseImage -notmatch '^ubuntu@sha256:[0-9a-f]{64}$') {

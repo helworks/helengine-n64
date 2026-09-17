@@ -1,5 +1,8 @@
-# Generated target artifacts and dependency checkouts.
-.deps/
+# Generated target artifacts. Pinned dependency checkouts are submodules;
+# anything else dropped into .deps is local scratch.
+.deps/*
+!.deps/libdragon
+!.deps/tiny3d
 build/
 bin/
 obj/

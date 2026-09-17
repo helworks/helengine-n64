@@ -61,6 +61,10 @@ foreach ($path in @($romPath, $elfPath, $mapPath)) {
 
 $hash = (Get-FileHash -LiteralPath $romPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $manifest = Get-Content -LiteralPath (Join-Path $root 'dependencies.json') -Raw | ConvertFrom-Json
+# The library pins live in the submodule gitlinks, so read them from git rather
+# than from the manifest, which now records only the toolchain image.
+$libdragonRevision = (& git -C (Join-Path $root '.deps/libdragon') rev-parse HEAD).Trim()
+$tiny3dRevision = (& git -C (Join-Path $root '.deps/tiny3d') rev-parse HEAD).Trim()
 $toolchainId = (& docker image inspect helengine-n64-toolchain --format '{{.Id}}').Trim()
 $buildId = (& docker image inspect $image --format '{{.Id}}').Trim()
 $record = [ordered]@{
@@ -70,7 +74,11 @@ $record = [ordered]@{
     elf = [ordered]@{ path = 'build/helengine_n64.elf'; bytes = (Get-Item -LiteralPath $elfPath).Length }
     map = [ordered]@{ path = 'build/helengine_n64.map'; bytes = (Get-Item -LiteralPath $mapPath).Length }
     docker = [ordered]@{ toolchainImage = $toolchainId; buildImage = $buildId }
-    dependencies = $manifest
+    dependencies = [ordered]@{
+        toolchain = $manifest.toolchain
+        libdragon = $libdragonRevision
+        tiny3d = $tiny3dRevision
+    }
     video = [ordered]@{ resolution = '320x240'; color = '16-bit'; buffers = 2; depth = '16-bit'; gamma = 'GAMMA_NONE'; filters = 'FILTERS_RESAMPLE'; aa = 'AA_NONE' }
 }
 $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $buildPath 'build-record.json') -Encoding utf8

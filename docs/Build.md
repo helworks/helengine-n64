@@ -8,15 +8,28 @@ builder.
 
 - Docker Engine 29.6.1 or a compatible Docker Engine.
 - PowerShell 7 or Windows PowerShell.
-- The pinned revisions and immutable base image in dependencies.json.
+- The libdragon and Tiny3D submodules under .deps, and the immutable base image
+  digest in dependencies.json.
 
-Run setup once from the repository root:
+libdragon and Tiny3D are git submodules, so their revisions are pinned by the
+gitlinks recorded in this repository rather than by a manifest. A fresh clone
+must fetch them:
+
+    git submodule update --init --recursive
+
+Then run setup once from the repository root:
 
     ./scripts/setup-toolchain.ps1
 
-The setup script clones or verifies the pinned dependency checkouts, builds the
-toolchain image, records its immutable image digest and compiler version, and
-refuses to overwrite locally modified dependency checkouts.
+The setup script verifies both submodules are checked out and unmodified, builds
+the toolchain image from libdragon's Dockerfile on the pinned base image, and
+records the resulting image digest and compiler version into dependencies.json.
+It no longer clones anything; changing a library revision means moving the
+submodule and committing the new gitlink, which makes the change reviewable in
+the diff.
+
+Each build records the revisions it actually used - both submodule commits plus
+the toolchain image - into build/build-record.json.
 
 ## Build
 
