@@ -118,3 +118,17 @@ $quadBlitRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
     'helengine-n64-build', './build/n64-quad-blit-geometry-tests')
 & docker @quadBlitRun
 if ($LASTEXITCODE -ne 0) { throw 'N64 quad-blit-geometry tests failed.' }
+
+$clipRectCompile = @(
+    'run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', 'g++',
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-pedantic',
+    '-I.', 'tests/Nintendo64ClipRectStackTests.cpp', 'src/platform/n64/Nintendo64ClipRectStack.cpp',
+    '-o', 'build/n64-clip-rect-stack-tests'
+)
+& docker @clipRectCompile
+if ($LASTEXITCODE -ne 0) { throw 'N64 clip-rect-stack test compilation failed.' }
+$clipRectRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', './build/n64-clip-rect-stack-tests')
+& docker @clipRectRun
+if ($LASTEXITCODE -ne 0) { throw 'N64 clip-rect-stack tests failed.' }

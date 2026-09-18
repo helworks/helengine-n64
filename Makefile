@@ -72,6 +72,7 @@ OBJECTS += \
 	$(BUILD_DIR)/platform/n64/Nintendo64SpriteGeometry.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64RoundedRectGeometry.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64QuadBlitGeometry.o \
+	$(BUILD_DIR)/platform/n64/Nintendo64ClipRectStack.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64RenderManager2D.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64InputBackend.o
 OBJECTS += $(N64_GENERATED_CORE_OBJECTS)
