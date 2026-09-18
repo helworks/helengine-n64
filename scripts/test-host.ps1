@@ -104,3 +104,17 @@ $roundedRectRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
     'helengine-n64-build', './build/n64-rounded-rect-geometry-tests')
 & docker @roundedRectRun
 if ($LASTEXITCODE -ne 0) { throw 'N64 rounded-rect-geometry tests failed.' }
+
+$quadBlitCompile = @(
+    'run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', 'g++',
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-pedantic',
+    '-I.', 'tests/Nintendo64QuadBlitGeometryTests.cpp', 'src/platform/n64/Nintendo64QuadBlitGeometry.cpp',
+    '-o', 'build/n64-quad-blit-geometry-tests'
+)
+& docker @quadBlitCompile
+if ($LASTEXITCODE -ne 0) { throw 'N64 quad-blit-geometry test compilation failed.' }
+$quadBlitRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', './build/n64-quad-blit-geometry-tests')
+& docker @quadBlitRun
+if ($LASTEXITCODE -ne 0) { throw 'N64 quad-blit-geometry tests failed.' }
