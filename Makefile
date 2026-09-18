@@ -22,7 +22,12 @@ N64_ROM_EXPANSIONPAK := unused
 include $(N64_INST)/include/n64.mk
 include $(N64_INST)/include/t3d.mk
 
-N64_CXXFLAGS += -Isrc
+# -Isrc lets platform code #include its own headers unqualified; -I. is also required because
+# Nintendo64QuadBlitGeometry.cpp and Nintendo64ClipRectStack.cpp #include their own headers as
+# "src/platform/n64/...", the same repo-root-relative form scripts/test-host.ps1 already compiles them
+# with via its own -I. .  Without it the native build cannot resolve those two headers at all, even
+# though the host test script always could.
+N64_CXXFLAGS += -Isrc -I.
 
 OBJECTS := \
 	$(BUILD_DIR)/main.o \
@@ -69,10 +74,10 @@ OBJECTS += \
 	$(BUILD_DIR)/platform/n64/Nintendo64RenderManager3D.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64LightMath.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64LightExtractor.o \
-	$(BUILD_DIR)/platform/n64/Nintendo64SpriteGeometry.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64RoundedRectGeometry.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64QuadBlitGeometry.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64ClipRectStack.o \
+	$(BUILD_DIR)/platform/n64/Nintendo64RenderCommandExecutor2D.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64RenderManager2D.o \
 	$(BUILD_DIR)/platform/n64/Nintendo64InputBackend.o
 OBJECTS += $(N64_GENERATED_CORE_OBJECTS)

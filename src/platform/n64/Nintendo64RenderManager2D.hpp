@@ -5,32 +5,35 @@
 #include <cstdint>
 #include <string>
 
+#include "RenderCommandListBuilder2D.hpp"
 #include "RenderManager2D.hpp"
-#include "IRenderVisitor2D.hpp"
+
+#include "platform/n64/Nintendo64RenderCommandExecutor2D.hpp"
 
 namespace helengine::n64 {
 
 /// Screen-space 2D render manager for the Nintendo 64: turns cooked engine texture payloads into RDP-ready
-/// surfaces and blits the authored sprite queue of the first camera once the 3D pass has finished the frame.
-class Nintendo64RenderManager2D final : public ::RenderManager2D, public ::IRenderVisitor2D {
+/// surfaces and, once the 3D pass has finished the frame, flattens every authored camera's render queue
+/// through the shared `RenderCommandListBuilder2D` and executes the result with `Nintendo64RenderCommandExecutor2D`.
+class Nintendo64RenderManager2D final : public ::RenderManager2D {
 public:
+    /// Disposes and releases the retained command-list builder, if `Draw` ever allocated one.
+    ~Nintendo64RenderManager2D() override;
+
     /// Builds one runtime texture from an already deserialized cooked engine texture payload.
     ::RuntimeTexture* BuildTextureFromRaw(::TextureAsset* data) override;
     /// Builds one runtime texture from a cooked engine texture payload read through the content source.
     ::RuntimeTexture* BuildTextureFromCooked(std::string cookedAssetPath, ::IContentStreamSource* contentStreamSource) override;
-    /// Runs the screen-space 2D pass after the 3D pass for the first authored camera.
+    /// Runs the screen-space 2D pass after the 3D pass for every authored camera.
     void Draw() override;
-    /// Draws the fill of one authored rounded rectangle as a flat-coloured screen-space triangle fan. Only
-    /// the fill is drawn: the border fields and the texture-modulation fields are not honoured yet. The
-    /// per-corner `Corners` mask is not honoured either, so every corner is always rounded by the resolved
-    /// radius no matter which corners the author selected.
+    /// Fails loudly. Generated Core only reaches this by visiting the 2D queue with this manager as the
+    /// visitor; the N64 pass instead drives `Draw` from a command list built by `RenderCommandListBuilder2D`,
+    /// so arriving here means the pass was driven the old way and the drawable would be silently dropped.
     void DrawRoundedRect(::IRoundedRectDrawable2D* shape) override;
-    /// Draws one authored sprite as a textured screen-space rectangle.
+    /// Fails loudly, for the same reason as `DrawRoundedRect`.
     void DrawSprite(::ISpriteDrawable2D* sprite) override;
-    /// Text is not part of the authored N64 2D feature set yet, so drawing a string does nothing.
+    /// Fails loudly, for the same reason as `DrawRoundedRect`.
     void DrawText(::ITextDrawable2D* text) override;
-    /// Visits one queued 2D drawable and dispatches it back through generated Core.
-    void Visit(::IDrawable2D* drawable) override;
 
 protected:
     /// Rejects partial texture updates: N64 textures are built once from a cooked payload and never streamed into.
@@ -38,19 +41,12 @@ protected:
                                  ::Array<uint8_t>* rgba8, int32_t sourceRowPitch) override;
 
 private:
-    /// Number of sprite blits emitted so far in the current frame's 2D pass; reset at the top of every `Draw`.
-    int32_t DrawCallCount = 0;
-    /// True once the first sprite blit of the run has been traced, so `n64:first-sprite-draw` is emitted exactly once.
-    bool HasLoggedSpriteDraw = false;
-    /// True once the first sprite skipped for a zero-area destination has been traced, so
-    /// `n64:first-sprite-skipped` is emitted exactly once instead of every frame the degenerate sprite is queued.
-    bool HasLoggedSkippedSprite = false;
-    /// True once the first rounded-rectangle fill of the run has been traced, so `n64:first-rounded-rect-draw`
-    /// is emitted exactly once.
-    bool HasLoggedRoundedRectDraw = false;
-    /// True once the first rounded rectangle skipped for a zero-area destination has been traced, so
-    /// `n64:first-rounded-rect-skipped` is emitted exactly once instead of every frame the empty shape is queued.
-    bool HasLoggedSkippedRoundedRect = false;
+    /// Shared 2D command-list builder. It owns and reuses the `RenderCommandList2D` it returns across frames,
+    /// so it is allocated lazily on the first `Draw` and never rebuilt; the destructor is the only place that
+    /// frees it, because deleting the list it returns instead would free the builder's own state.
+    ::RenderCommandListBuilder2D* CommandListBuilder = nullptr;
+    /// Executes one flattened command list against the RDP.
+    Nintendo64RenderCommandExecutor2D Executor;
 };
 
 } // namespace helengine::n64
