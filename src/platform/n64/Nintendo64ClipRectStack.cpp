@@ -7,13 +7,17 @@ namespace helengine::n64 {
 
 Nintendo64ClipRectStack::Nintendo64ClipRectStack(int32_t frameWidth, int32_t frameHeight)
     : FrameRect{}, Levels{}, DepthValue(0) {
-    const int32_t width = frameWidth > 0 ? frameWidth : 0;
-    const int32_t height = frameHeight > 0 ? frameHeight : 0;
+    if (frameWidth <= 0) {
+        throw std::invalid_argument("Nintendo64ClipRectStack frame width must be positive.");
+    }
+    if (frameHeight <= 0) {
+        throw std::invalid_argument("Nintendo64ClipRectStack frame height must be positive.");
+    }
     FrameRect.X = 0;
     FrameRect.Y = 0;
-    FrameRect.Width = width;
-    FrameRect.Height = height;
-    FrameRect.IsEmpty = width <= 0 || height <= 0;
+    FrameRect.Width = frameWidth;
+    FrameRect.Height = frameHeight;
+    FrameRect.IsEmpty = false;
 }
 
 int32_t Nintendo64ClipRectStack::Depth() const {

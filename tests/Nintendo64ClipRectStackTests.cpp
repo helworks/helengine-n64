@@ -141,6 +141,30 @@ void TestAxisCoverageWithAsymmetricFrame() {
     Check(current.Height == 50, "the height is clamped correctly");
 }
 
+/// Constructing a stack with a non-positive frame width is a programming error.
+void TestConstructorThrowsOnNonPositiveWidth() {
+    bool threw = false;
+    try {
+        Nintendo64ClipRectStack stack(0, 240);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+
+    Check(threw, "constructing with zero width throws");
+}
+
+/// Constructing a stack with a non-positive frame height is a programming error.
+void TestConstructorThrowsOnNonPositiveHeight() {
+    bool threw = false;
+    try {
+        Nintendo64ClipRectStack stack(320, -1);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+
+    Check(threw, "constructing with negative height throws");
+}
+
 } // namespace
 
 int main() {
@@ -154,6 +178,8 @@ int main() {
     TestPopOnAnEmptyStackThrows();
     TestPushPastTheDepthLimitThrows();
     TestAxisCoverageWithAsymmetricFrame();
+    TestConstructorThrowsOnNonPositiveWidth();
+    TestConstructorThrowsOnNonPositiveHeight();
     if (failures != 0) {
         std::fprintf(stderr, "%d clip-rect-stack test(s) failed\n", failures);
         return 1;
