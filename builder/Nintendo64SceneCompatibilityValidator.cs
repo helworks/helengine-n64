@@ -4,7 +4,7 @@ namespace helengine.n64.builder;
 
 /// <summary>Rejects build manifests outside the N64 v0.2 subset: one camera, one mesh, and authored sprite textures.</summary>
 public sealed class Nintendo64SceneCompatibilityValidator {
-    static readonly HashSet<string> SupportedFeatures = new(StringComparer.OrdinalIgnoreCase) { "scene", "mesh", "camera", "material", "texture", "sprite" };
+    static readonly HashSet<string> SupportedFeatures = new(StringComparer.OrdinalIgnoreCase) { "scene", "mesh", "camera", "material", "texture", "sprite", "text", "font" };
 
     public void Validate(PlatformBuildManifest manifest) {
         if (manifest == null) throw new ArgumentNullException(nameof(manifest));

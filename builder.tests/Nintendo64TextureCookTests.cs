@@ -213,6 +213,44 @@ public sealed class Nintendo64TextureCookTests {
     }
 
     /// <summary>
+    /// Ensures the font-atlas-texture settings (256 max resolution) and the plain texture settings (64 max
+    /// resolution) produce visibly different cook results from the identical source atlas, which is the entire
+    /// point of publishing a second capability: without it, every font atlas was crushed to the 64 pixel cap.
+    /// </summary>
+    [Fact]
+    public void Cook_FontSettingsLeaveA256WideAtlasUnscaledWhileTextureSettingsCrushIt() {
+        // The brief's fixture code called a `CreateColumnTintedTexture(width, height)` helper that returns a
+        // TextureAsset directly. This file's existing fixtures instead write a source PNG and decode it through
+        // Nintendo64SourceTextureDecoder, matching every other cook test here. WriteColumnTintedSourcePng's per-
+        // column tint formula (x + 1) * 10 only stays within the 0-255 Color.FromArgb range up to width 25, so a
+        // 256-wide atlas reuses WriteSourcePng instead: this test only asserts cooked width/height, which do not
+        // depend on source pixel content.
+        string sourcePath = WriteSourcePng(256, 128);
+        try {
+            TextureAsset atlas = new Nintendo64SourceTextureDecoder().Decode(sourcePath);
+
+            TextureAsset cookedAsFont = new Nintendo64TextureCooker().Cook(atlas, new TextureAssetProcessorSettings {
+                MaxResolution = 256,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            });
+
+            TextureAsset cookedAsTexture = new Nintendo64TextureCooker().Cook(atlas, new TextureAssetProcessorSettings {
+                MaxResolution = 64,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            });
+
+            Assert.Equal(256, cookedAsFont.Width);
+            Assert.Equal(128, cookedAsFont.Height);
+            Assert.Equal(64, cookedAsTexture.Width);
+            Assert.Equal(32, cookedAsTexture.Height);
+        } finally {
+            File.Delete(sourcePath);
+        }
+    }
+
+    /// <summary>
     /// Writes one serialized engine texture asset mirroring the editor's generated platform font atlas.
     /// </summary>
     /// <param name="width">Source width in pixels.</param>

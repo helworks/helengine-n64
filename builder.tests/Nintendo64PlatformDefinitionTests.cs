@@ -25,7 +25,10 @@ public sealed class Nintendo64PlatformDefinitionTests {
             definition.CodegenProfiles.Single().Settings,
             setting => setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures);
         Assert.Contains("shaders", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("text2d", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        // `text2d` was removed deliberately. Listing it never closed the gate: feature pruning restores a gated
+        // type whenever a surviving type references it, and the ungated `FPSComponent` references
+        // `TextComponent`, so the text machinery was compiled into the ROM the whole time it was listed here.
+        Assert.DoesNotContain("text2d", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("debug_overlay", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("render2d", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sprites", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
@@ -194,7 +197,12 @@ public sealed class Nintendo64PlatformDefinitionTests {
     public void Create_DeclaresBuilderOwnedTextureCookCapability() {
         PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
 
-        PlatformAssetCookCapabilityDefinition capability = Assert.Single(definition.AssetCookCapabilities);
+        // N64 now publishes a second, builder-owned capability for font-atlas-texture sources (see
+        // Create_ExposesASeparateFontAtlasCookCapability), so this filters to the plain texture capability
+        // rather than asserting there is only one capability overall.
+        PlatformAssetCookCapabilityDefinition capability = Assert.Single(
+            definition.AssetCookCapabilities,
+            candidate => candidate.SourceAssetKind == "texture");
         Assert.Equal("texture", capability.SourceAssetKind);
         Assert.Equal("runtime-texture", capability.TargetArtifactKind);
         Assert.Equal(PlatformAssetCookOwnershipKind.BuilderOwned, capability.OwnershipKind);
@@ -205,6 +213,62 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.Equal(TextureAssetColorFormat.Rgba32, settings.ColorFormat);
         Assert.Equal(TextureAssetAlphaPrecision.A8, settings.AlphaPrecision);
         Assert.Contains(TextureAssetColorFormat.Rgba32.ToString(), capability.TextureFormatCapabilities.SupportedColorFormatIds);
+    }
+
+    /// <summary>
+    /// Ensures the font-atlas-texture capability is a distinct builder-owned capability from the plain texture
+    /// capability, with its own settings contract id and its own, much higher resolution cap: the shared
+    /// "texture" cap of 64 crushes the editor default (256x128) and demo disc body (256x256) font atlases to
+    /// two or three pixel glyphs, which is exactly what a second capability exists to avoid.
+    /// </summary>
+    [Fact]
+    public void Create_ExposesASeparateFontAtlasCookCapability() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        PlatformAssetCookCapabilityDefinition texture = Assert.Single(
+            definition.AssetCookCapabilities,
+            capability => capability.SourceAssetKind == "texture");
+        PlatformAssetCookCapabilityDefinition fontAtlas = Assert.Single(
+            definition.AssetCookCapabilities,
+            capability => capability.SourceAssetKind == "font-atlas-texture");
+
+        Assert.Equal("n64-texture", texture.SettingsContractId);
+        Assert.Equal("n64-font-atlas-texture", fontAtlas.SettingsContractId);
+        Assert.Equal("runtime-texture", fontAtlas.TargetArtifactKind);
+        Assert.Equal(PlatformAssetCookOwnershipKind.BuilderOwned, fontAtlas.OwnershipKind);
+
+        TextureAssetProcessorSettings textureSettings =
+            Nintendo64TextureCookSettingsSerializer.Deserialize(texture.DefaultSerializedPlatformSettings);
+        TextureAssetProcessorSettings fontSettings =
+            Nintendo64TextureCookSettingsSerializer.Deserialize(fontAtlas.DefaultSerializedPlatformSettings);
+
+        Assert.Equal(64, textureSettings.MaxResolution);
+        Assert.Equal(256, fontSettings.MaxResolution);
+        // The two caps must not drift back together: one shared value is what crushed font atlases to 64.
+        Assert.NotEqual(textureSettings.MaxResolution, fontSettings.MaxResolution);
+    }
+
+    /// <summary>
+    /// Ensures both the authored text component and the FPS overlay (which is built entirely out of authored
+    /// text components) are recognized as transform-only supported component types, rather than falling through
+    /// to the default unsupported/rejected path now that the N64 text pass exists.
+    /// </summary>
+    [Fact]
+    public void Create_SupportsTextAndFpsComponentsWithTransformOnly() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+
+        // The brief's fixture text used `ComponentTypeName`; the real property on
+        // PlatformComponentSupportRule is `ComponentTypeId` (see other assertions in this file), so this uses
+        // that name while keeping the same assertion meaning: exactly one rule per component type name.
+        PlatformComponentSupportRule text = Assert.Single(
+            definition.ComponentSupportRules,
+            rule => rule.ComponentTypeId == "helengine.TextComponent");
+        PlatformComponentSupportRule fps = Assert.Single(
+            definition.ComponentSupportRules,
+            rule => rule.ComponentTypeId == "helengine.FPSComponent");
+
+        Assert.Equal(PlatformComponentSupportKind.Transform, text.SupportKind);
+        Assert.Equal(PlatformComponentSupportKind.Transform, fps.SupportKind);
     }
 
     [Fact]

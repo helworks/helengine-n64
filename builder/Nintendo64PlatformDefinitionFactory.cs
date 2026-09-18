@@ -10,9 +10,12 @@ public static class Nintendo64PlatformDefinitionFactory {
     // Create_UsesOnlyFeatureIdsDeclaredByHelengineCatalog asserts. This list deliberately does NOT match the
     // generator's own n64-minimal preset: that preset also forces render2d off and selects the custom-retro
     // runtime, which would strip the sprite pass and the std types the shipped generated Core is built on.
-    // render2d and sprites stay enabled so authored SpriteComponents reach the runtime; text2d stays disabled
-    // until the N64 text pass exists.
-    const string ForcedDisabledFeatures = "debug_overlay;shaders;text2d";
+    // render2d and sprites stay enabled so authored SpriteComponents reach the runtime. `text2d` used to be
+    // listed here too, but it never closed the gate: feature pruning restores a gated type whenever a
+    // surviving type references it, and the ungated `FPSComponent` references `TextComponent` directly, so
+    // the text machinery was compiled into the ROM the whole time `text2d` was listed. It is removed here
+    // rather than left as dead weight.
+    const string ForcedDisabledFeatures = "debug_overlay;shaders";
 
     /// <summary>
     /// Codegen option id selecting <c>std::string</c> as the generated Core's string storage.
@@ -139,6 +142,13 @@ public static class Nintendo64PlatformDefinitionFactory {
                 PlatformAssetCookOwnershipKind.BuilderOwned,
                 "n64-texture",
                 CreateDefaultSerializedTextureCookSettings(),
+                CreateTextureFormatCapabilities()),
+            new PlatformAssetCookCapabilityDefinition(
+                "font-atlas-texture",
+                "runtime-texture",
+                PlatformAssetCookOwnershipKind.BuilderOwned,
+                "n64-font-atlas-texture",
+                CreateDefaultSerializedFontAtlasCookSettings(),
                 CreateTextureFormatCapabilities())
         ];
 
@@ -155,7 +165,9 @@ public static class Nintendo64PlatformDefinitionFactory {
                 new PlatformComponentSupportRule("helengine.DirectionalLightComponent", PlatformComponentSupportKind.Transform, "Tiny3D supports up to seven directional lights.", string.Empty),
                 new PlatformComponentSupportRule("helengine.AmbientLightComponent", PlatformComponentSupportKind.Transform, "Tiny3D supports one summed ambient color.", string.Empty),
                 new PlatformComponentSupportRule("helengine.PointLightComponent", PlatformComponentSupportKind.Unsupported, "N64 lighting supports directional and ambient lights only.", "Remove point lights or exclude them on N64."),
-                new PlatformComponentSupportRule("helengine.SpotLightComponent", PlatformComponentSupportKind.Unsupported, "N64 lighting supports directional and ambient lights only.", "Remove spot lights or exclude them on N64.")
+                new PlatformComponentSupportRule("helengine.SpotLightComponent", PlatformComponentSupportKind.Unsupported, "N64 lighting supports directional and ambient lights only.", "Remove spot lights or exclude them on N64."),
+                new PlatformComponentSupportRule("helengine.TextComponent", PlatformComponentSupportKind.Transform, "Authored text renders through the shared 2D command list; selection and input are not driven.", string.Empty),
+                new PlatformComponentSupportRule("helengine.FPSComponent", PlatformComponentSupportKind.Transform, "The FPS overlay renders as ordinary authored text.", string.Empty)
             ],
             [codegen],
             [new PlatformStorageProfileDefinition("dragonfs-package", "DragonFS Package", PlatformStorageProfileKind.LooseFiles, "n64-dragonfs-package", false)],
@@ -171,6 +183,22 @@ public static class Nintendo64PlatformDefinitionFactory {
     static string CreateDefaultSerializedTextureCookSettings() {
         return Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
             MaxResolution = 64,
+            ColorFormat = TextureAssetColorFormat.Rgba32,
+            AlphaPrecision = TextureAssetAlphaPrecision.A8
+        });
+    }
+
+    /// <summary>
+    /// Creates the serialized default N64 font atlas cook settings. Font atlases keep a far higher resolution
+    /// cap than ordinary textures: the icons this platform ships are 12 pixels on screen and survive a 64 pixel
+    /// cap, but the editor default atlas is 256x128 and the demo disc body atlas is 256x256, and the same cap
+    /// reduces their glyphs to two or three pixels. A 256x256 atlas costs 128 KB of the console's 4 MB once it
+    /// is packed to RGBA 5551, which is the trade this cap makes deliberately.
+    /// </summary>
+    /// <returns>Serialized default N64 font atlas settings.</returns>
+    static string CreateDefaultSerializedFontAtlasCookSettings() {
+        return Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
+            MaxResolution = 256,
             ColorFormat = TextureAssetColorFormat.Rgba32,
             AlphaPrecision = TextureAssetAlphaPrecision.A8
         });
