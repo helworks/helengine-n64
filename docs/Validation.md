@@ -919,3 +919,99 @@ parameter, so all four corners always round together and an author who selects
 only some of them gets all of them. The pass does no blending, so the panel's
 authored alpha of 224 reaches the frame buffer opaque - the clear colour behind
 it does not show through.
+
+## cube_test with authored text (2026-09-18)
+
+The demodisc `scenes/rendering/cube_test.helen` scene was rebuilt through the
+normal editor pipeline with the UI root no longer excluded on N64. This is the
+first N64 ROM that draws authored text.
+
+Build workspace
+`C:\dev\helworks\builds\helengine-n64\text\work\n64\4abde6e0019d4e8681a02c771767716c`
+(`generated-core` and `builder\n64-dragonfs`). Editor log `editor-build2.log`
+and native log `native-build3.out.log`, both under
+`C:\dev\helworks\builds\helengine-n64\text`. ROM 2031616 bytes, SHA-256
+`89692fe9e63879732e144a527b555e036272b8b7ed6e1ad76684c96dd3df56db`.
+
+The editor build fails at its own final step with "An error occurred trying to
+start process 'pwsh'". That is the native build executor hardcoding `pwsh`,
+which is not installed on this machine; everything before it succeeds. The
+native step was rerun by hand with `scripts/build.ps1`, which must itself be
+launched through `Start-Process` with redirected streams, because Windows
+PowerShell 5.1 turns docker's stderr progress into a terminating error under
+`ErrorActionPreference = 'Stop'`.
+
+### What the trace says
+
+```
+n64:texture-loaded id=runtime-texture:cooked/fonts/demodiscbody.hetex size=256x256
+n64:texture-loaded id=runtime-texture:cooked/fonts/default.hetex size=256x128
+n64:scene-ready cameras=1 drawables3d=1 drawables2d=11 directional=1 ambient=0
+n64:first-rounded-rect-draw size=86x38 radius=200/100 verts=96
+n64:first-sprite-draw size=12x12 calls=1
+n64:first-glyph-draw size=8x10 calls=4
+n64:command-list commands=87 clip=0/0 quads=3 glyphs=82 rects=2 frame=320x240
+n64:first-frame-complete
+```
+
+No `n64:error` line appears. The two font atlases arrive at their authored
+resolutions rather than the 64 pixels every texture took before, which is the
+second cook capability doing its job: the staged filesystem grew from 38 files
+and 536741 bytes to 38 files and 906581 bytes, and the whole difference is one
+262237-byte atlas and one 131160-byte atlas replacing two 16526-byte ones. The
+thirty icon textures are still 16526 bytes each, so the two policies are
+genuinely separate rather than the cap having been raised globally.
+
+The panel still fills at 86x38. That number is the evidence that the shared
+engine fix reached this ROM: `RenderCommandListBuilder2D.EmitRoundedRect`
+previously emitted the authored size unscaled, which would have filled the
+panel at 345x150 on a 320-pixel-wide frame buffer.
+
+### Read directly from captures
+
+The FPS overlay renders at the top left across two lines, reading
+`Update FPS: 60.0` and `Render FPS: 60.0`. The console instruction panel at the
+lower left now carries the labels `Camera` and `Light` beside its three icons,
+both legible. The cube continues to rotate: captures taken 900 ms apart show it
+at different angles.
+
+### Not implemented, and defects this step found
+
+The millisecond figure in the second FPS row reads `214748364.7 ms`, which is
+`int32.MaxValue` divided by ten. Some render-time metric is never fed on this
+platform and saturates. The glyphs rendering it are correct; the value is not.
+
+The light-indicator label and swatch render at roughly their authored size
+instead of a quarter of it, so the word `Light` fills about a quarter of the
+screen. Its subtree hangs under an entity carrying a `ViewportComponent` with a
+1280x720 fixed size, and that component is present and registered in the
+generated core, so the cause is not that the type was pruned. The console
+instruction blueprint in the same frame *is* scaled correctly, so whatever
+drives one does not drive the other. Unresolved.
+
+The scene label never appears. It is authored at x=600 inside a 656-wide box on
+an unscaled 1280-wide canvas, so its box begins off the right edge of a
+320-pixel frame buffer. This was predicted in the design.
+
+Text is bilevel. RGBA 5551 carries one bit of alpha and the pass cuts out at
+128, so antialiased glyph edges become hard edges. This is why the first font
+scale tried, half the shared value, was rejected: at roughly four pixels tall
+the cutout left the rows unreadable. The scale PSP uses is legible.
+
+### One unreproduced hang
+
+The first ROM built in this step crashed once, immediately after
+`n64:first-frame-complete`, with `RSP CRASH | rsp_queue |
+rspq_syncpoint_wait`, "wait loop timed out (200 ms)", and the RSP halted. That
+wait is reached through `rdpq_detach_wait` at the end of the frame. It has not
+reproduced in seven subsequent runs across two builds, five of them
+back-to-back against the current ROM.
+
+The pass now issues 82 glyph blits per frame where it previously issued three
+sprite blits, which is by far the largest change in RDP workload this platform
+has seen, and it remains the leading suspect. Against that, the emulator's own
+stderr carried repeated `Exhausted LinkedDeviceHost memory` and "will exceed
+budget" warnings during the crashing run, so a host-side stall being read as a
+200 ms RSP timeout is a live alternative. The command-list trace refuted one
+theory outright: there are zero clip commands in the frame, so no degenerate
+scissor rectangle is ever issued.
