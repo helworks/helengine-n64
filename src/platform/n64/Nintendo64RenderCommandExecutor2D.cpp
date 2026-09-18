@@ -2,6 +2,8 @@
 
 #if HELENGINE_N64_HAS_GENERATED_CORE
 
+#include <cmath>
+
 #include <libdragon.h>
 
 #include "RenderCommand2DType.hpp"
@@ -25,6 +27,23 @@ namespace {
 /// Number of equal-angle segments the rounded-rect fill ring is split into; unchanged from the step that
 /// introduced it, so an authored shape keeps the same silhouette.
 constexpr int32_t kRoundedRectRingSteps = 32;
+
+/// Deepest nesting `Nintendo64ClipRectStack` accepts before its own `Push` throws `std::length_error`.
+/// Mirrored here rather than read through a public accessor on that class: `MaximumDepth` is a private
+/// implementation detail the stack does not otherwise need to expose, and duplicating the one number it
+/// takes to decide "would this push overflow" is cheaper than widening that class's public surface just so
+/// this guard can announce the failure on the debug channel before the exception fires.
+constexpr int32_t kMaximumClipStackDepth = 16;
+
+/// Tolerance used when deciding whether a resolved rotation is effectively zero.  Authored quaternions arrive
+/// as cooked floats and `rotationRadians` is an `atan2` of a rotated unit vector derived from one, so a
+/// visually unrotated sprite can still arrive with a rotation of a few times 1e-5 to 1e-6 radians of
+/// floating-point noise rather than a bit-exact zero.  An exact `!= 0.0f` comparison rejects those sprites
+/// even though the blitter would draw them identically to an unrotated one.  1e-4 radians (about 0.0057
+/// degrees) is loose enough to absorb that cooked-float noise with margin to spare, while still rejecting any
+/// rotation large enough that the axis-aligned blitter could not reproduce it - the same order of magnitude as
+/// the identity-quaternion tolerance this guard replaces.  Do not tighten this back toward zero.
+constexpr float kOrientationEpsilonRadians = 1e-4f;
 
 } // namespace
 
@@ -54,6 +73,13 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
     for (int32_t commandIndex = 0; commandIndex < commandCount; ++commandIndex) {
         const ::RenderCommand2DType commandType = commandList->GetCommandType(commandIndex);
         if (commandType == ::RenderCommand2DType::ClipPush) {
+            // `Push` throws a bare `std::length_error` past this depth, with no trace of its own.  Checking
+            // `Depth()` first, rather than catching the exception, lets the debug channel say what happened
+            // before the ROM goes down.
+            if (clipStack.Depth() >= kMaximumClipStackDepth) {
+                debugf("n64:error clip-stack-overflow\n");
+                throw new InvalidOperationException("N64 clip stack cannot nest past its fixed depth.");
+            }
             const ::float4 clipRect = commandList->GetClipPushRect(commandList->GetClipPushPayloadIndex(commandIndex));
             clipStack.Push(clipRect.X, clipRect.Y, clipRect.Z, clipRect.W);
             const Nintendo64ClipRect current = clipStack.Current();
@@ -61,6 +87,12 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
             continue;
         }
         if (commandType == ::RenderCommand2DType::ClipPop) {
+            // `Pop` throws a bare `std::underflow_error` on an unmatched pop, with no trace of its own.  Same
+            // treatment as the push guard above: check the state, do not catch the exception.
+            if (clipStack.Depth() <= 0) {
+                debugf("n64:error clip-stack-underflow\n");
+                throw new InvalidOperationException("N64 clip stack received more pops than pushes.");
+            }
             clipStack.Pop();
             const Nintendo64ClipRect current = clipStack.Current();
             rdpq_set_scissor(current.X, current.Y, current.X + current.Width, current.Y + current.Height);
@@ -73,7 +105,7 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
         if (commandType == ::RenderCommand2DType::TexturedQuad) {
             const int32_t payloadIndex = commandList->GetTexturedQuadPayloadIndex(commandIndex);
             const float rotationRadians = commandList->GetTexturedQuadRotation(payloadIndex);
-            if (rotationRadians != 0.0f) {
+            if (std::fabs(rotationRadians) > kOrientationEpsilonRadians) {
                 debugf("n64:error quad-rotation\n");
                 throw new NotSupportedException("N64 2D quads do not support rotation.");
             }
@@ -209,6 +241,10 @@ void Nintendo64RenderCommandExecutor2D::FillRoundedRect(::RenderCommandList2D* c
         left + geometry.DestinationWidth * 0.5f,
         top + geometry.DestinationHeight * 0.5f);
     if (vertices == nullptr) {
+        // A hard failure inside the frame loop has to announce itself on the debug channel before it throws,
+        // same as every other guard in this file: an unhandled exception here stops the ROM dead with nothing
+        // else to say why the panel never drew.
+        debugf("n64:error rounded-rect-ring-missing\n");
         throw new InvalidOperationException("N64 rounded-rect fill ring builder returned no vertices.");
     }
 
