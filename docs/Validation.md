@@ -913,6 +913,9 @@ render their art, pixel-identical to the previous ROM as counted above.
 
 `BorderColor` and `BorderThickness` are ignored, so this panel's two-pixel
 `(120, 140, 170)` border is absent and the shape is its fill alone. `Color` and
-`SourceRect` are ignored. The pass does no blending, so the panel's authored
-alpha of 224 reaches the frame buffer opaque - the clear colour behind it does
-not show through.
+`SourceRect` are ignored. The per-corner `Corners` mask is ignored as well: the
+shared `RoundedRectGeometryBuilder.BuildFillRingVertices` takes no per-corner
+parameter, so all four corners always round together and an author who selects
+only some of them gets all of them. The pass does no blending, so the panel's
+authored alpha of 224 reaches the frame buffer opaque - the clear colour behind
+it does not show through.

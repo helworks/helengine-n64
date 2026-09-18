@@ -21,7 +21,9 @@ public:
     /// Runs the screen-space 2D pass after the 3D pass for the first authored camera.
     void Draw() override;
     /// Draws the fill of one authored rounded rectangle as a flat-coloured screen-space triangle fan. Only
-    /// the fill is drawn: the border fields and the texture-modulation fields are not honoured yet.
+    /// the fill is drawn: the border fields and the texture-modulation fields are not honoured yet. The
+    /// per-corner `Corners` mask is not honoured either, so every corner is always rounded by the resolved
+    /// radius no matter which corners the author selected.
     void DrawRoundedRect(::IRoundedRectDrawable2D* shape) override;
     /// Draws one authored sprite as a textured screen-space rectangle.
     void DrawSprite(::ISpriteDrawable2D* sprite) override;
