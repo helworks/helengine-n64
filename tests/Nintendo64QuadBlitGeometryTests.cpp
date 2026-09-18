@@ -152,6 +152,26 @@ void TestYAxisSubRectPastTheFarEdgeIsClamped() {
     Check(geometry.SourceHeight == 32, "only the 32 texels up to the far edge survive (128 - 96 = 32)");
 }
 
+/// A crop that lands exactly on zero width must be reported as empty source. A regression changing the guard
+/// from <= to < would silently allow zero-width sources to reach the scale-factor division, yielding infinite
+/// scale and a corrupted frame.  The exact boundary is `sourceRectX = -0.5f` and `sourceRectWidth = 0.5f`
+/// on a 64-texel texture: both round to 32, so the crop removes exactly 32 texels, leaving 0.
+void TestXAxisCropThatLandsOnExactlyZeroReportsEmptySource() {
+    const Nintendo64QuadBlitGeometry2D geometry =
+        Nintendo64QuadBlitGeometry::Resolve(64, 64, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, 0.0f, 32.0f, 64.0f);
+
+    Check(geometry.Kind == Nintendo64QuadBlitKind::EmptySource, "a crop that lands on exactly zero width is empty");
+}
+
+/// A crop that lands exactly on zero height must be reported as empty source on the Y axis. Mirrors the X-axis
+/// boundary test with asymmetric 64x128 dimensions to ensure the guard is tested on both axes.
+void TestYAxisCropThatLandsOnExactlyZeroReportsEmptySource() {
+    const Nintendo64QuadBlitGeometry2D geometry =
+        Nintendo64QuadBlitGeometry::Resolve(64, 128, 0.0f, -0.5f, 1.0f, 0.5f, 0.0f, 0.0f, 64.0f, 32.0f);
+
+    Check(geometry.Kind == Nintendo64QuadBlitKind::EmptySource, "a crop that lands on exactly zero height is empty");
+}
+
 } // namespace
 
 int main() {
@@ -168,6 +188,8 @@ int main() {
     TestYAxisCropThatRemovesAllTexelsReportsEmptySource();
     TestYAxisSubRectBeforeTheNearEdgeIsCropped();
     TestYAxisSubRectPastTheFarEdgeIsClamped();
+    TestXAxisCropThatLandsOnExactlyZeroReportsEmptySource();
+    TestYAxisCropThatLandsOnExactlyZeroReportsEmptySource();
     if (failures != 0) {
         std::fprintf(stderr, "%d quad-blit-geometry test(s) failed\n", failures);
         return 1;
