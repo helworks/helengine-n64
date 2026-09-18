@@ -48,6 +48,9 @@ private:
     bool HasLoggedSkippedQuad = false;
     /// True once the first rounded-rectangle fill of the run has been traced.
     bool HasLoggedRoundedRectDraw = false;
+    /// True once the composition of the first executed command list has been traced, so
+    /// `n64:command-list` is emitted exactly once rather than every frame.
+    bool HasLoggedCommandList = false;
 };
 
 } // namespace helengine::n64

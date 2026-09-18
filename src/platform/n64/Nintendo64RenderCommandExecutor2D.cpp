@@ -125,6 +125,42 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
 
     // Leave the scissor covering the whole frame, because the 3D pass of the next frame does not set it.
     rdpq_set_scissor(0, 0, frameWidth, frameHeight);
+
+    // Trace the composition of the first list once.  Without it an emulator log shows which drawables were
+    // reached but not which command kinds the shared builder actually emitted, and the two differ: clip
+    // commands in particular are produced by the builder, never by a drawable, so nothing else would reveal
+    // that the pass is issuing scissor changes at all.
+    if (!HasLoggedCommandList) {
+        int32_t clipPushCount = 0;
+        int32_t clipPopCount = 0;
+        int32_t texturedQuadCount = 0;
+        int32_t glyphQuadCount = 0;
+        int32_t roundedRectCount = 0;
+        for (int32_t traceIndex = 0; traceIndex < commandCount; ++traceIndex) {
+            const ::RenderCommand2DType traceType = commandList->GetCommandType(traceIndex);
+            if (traceType == ::RenderCommand2DType::ClipPush) {
+                clipPushCount++;
+            } else if (traceType == ::RenderCommand2DType::ClipPop) {
+                clipPopCount++;
+            } else if (traceType == ::RenderCommand2DType::TexturedQuad) {
+                texturedQuadCount++;
+            } else if (traceType == ::RenderCommand2DType::GlyphQuad) {
+                glyphQuadCount++;
+            } else if (traceType == ::RenderCommand2DType::RoundedRect) {
+                roundedRectCount++;
+            }
+        }
+        debugf("n64:command-list commands=%ld clip=%ld/%ld quads=%ld glyphs=%ld rects=%ld frame=%ldx%ld\n",
+               static_cast<long>(commandCount),
+               static_cast<long>(clipPushCount),
+               static_cast<long>(clipPopCount),
+               static_cast<long>(texturedQuadCount),
+               static_cast<long>(glyphQuadCount),
+               static_cast<long>(roundedRectCount),
+               static_cast<long>(frameWidth),
+               static_cast<long>(frameHeight));
+        HasLoggedCommandList = true;
+    }
 }
 
 void Nintendo64RenderCommandExecutor2D::BlitQuad(::RuntimeTexture* texture, ::float4 bounds, ::float4 sourceRect,
