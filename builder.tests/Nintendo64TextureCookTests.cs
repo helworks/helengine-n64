@@ -96,6 +96,47 @@ public sealed class Nintendo64TextureCookTests {
     }
 
     /// <summary>
+    /// Ensures the executor accepts the font-atlas-texture source kind and cooks it with whichever settings the
+    /// work item carries, rather than only accepting the literal string while silently falling back to the 64
+    /// pixel texture cap. The work item here carries the resolved font-atlas-texture capability's 256 pixel
+    /// settings (the same settings <see cref="Nintendo64PlatformDefinitionFactory.Create"/> publishes for that
+    /// capability), and the source is wider than the 64 pixel texture cap, so a cooked width of 256 proves both
+    /// that the kind was accepted and that the right settings were carried through the routing, not just that
+    /// nothing threw.
+    /// </summary>
+    [Fact]
+    public void Execute_WritesCookedFontAtlasUnderPackageSourceRootUsingFontSettings() {
+        string root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-n64\\cube-test\\tests", Guid.NewGuid().ToString("N"));
+        string sourcePath = WriteSourcePng(256, 128);
+        try {
+            Directory.CreateDirectory(root);
+            string fontSettings = Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
+                MaxResolution = 256,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            });
+            PlatformCookWorkItem workItem = CreateWorkItem(sourcePath, "font-atlas-texture", "cooked/fonts/atlas.hasset", fontSettings);
+
+            new Nintendo64PlatformCookWorkItemExecutor().Execute(workItem, root);
+
+            string cookedPath = Path.Combine(root, "cooked", "fonts", "atlas.hasset");
+            Assert.True(File.Exists(cookedPath));
+            helengine.TextureAsset cooked = Assert.IsType<helengine.TextureAsset>(
+                helengine.files.AssetSerializer.DeserializeFromBytes(File.ReadAllBytes(cookedPath)));
+            // 256, not the 64 pixel texture cap: this is what would silently regress to 64 if the executor's
+            // accepted-kinds literal were mistyped or dropped, since CreateWorkItem's settings still say 256 but
+            // a rejected/misrouted kind would either throw (caught by this test) or never reach this assertion.
+            Assert.Equal(256, cooked.Width);
+            Assert.Equal("icon", cooked.Id);
+        } finally {
+            File.Delete(sourcePath);
+            if (Directory.Exists(root)) {
+                Directory.Delete(root, true);
+            }
+        }
+    }
+
+    /// <summary>
     /// Ensures a non-positive maximum resolution fails loudly instead of silently skipping the downscale.
     /// </summary>
     [Fact]
@@ -316,13 +357,38 @@ public sealed class Nintendo64TextureCookTests {
     }
 
     /// <summary>
-    /// Creates one platform cook work item for the supplied source path, kind, and output path.
+    /// Creates one platform cook work item for the supplied source path, kind, and output path, carrying the
+    /// default 64 pixel N64 texture cook settings.
     /// </summary>
     /// <param name="sourcePath">Absolute source asset path.</param>
     /// <param name="sourceAssetKind">Source asset kind carried by the work item.</param>
     /// <param name="outputRelativePath">Runtime-relative cooked output path.</param>
     /// <returns>Platform cook work item.</returns>
     static PlatformCookWorkItem CreateWorkItem(string sourcePath, string sourceAssetKind, string outputRelativePath) {
+        return CreateWorkItem(
+            sourcePath,
+            sourceAssetKind,
+            outputRelativePath,
+            Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
+                MaxResolution = 64,
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            }));
+    }
+
+    /// <summary>
+    /// Creates one platform cook work item for the supplied source path, kind, output path, and already-serialized
+    /// platform settings. This overload lets a test carry settings other than the default 64 pixel texture cap -
+    /// for example the resolved font-atlas-texture capability's settings - through to the executor, mirroring how
+    /// the editor-owned build graph resolves settings from the matching capability before the work item ever
+    /// reaches <see cref="Nintendo64PlatformCookWorkItemExecutor"/>.
+    /// </summary>
+    /// <param name="sourcePath">Absolute source asset path.</param>
+    /// <param name="sourceAssetKind">Source asset kind carried by the work item.</param>
+    /// <param name="outputRelativePath">Runtime-relative cooked output path.</param>
+    /// <param name="serializedPlatformSettings">Serialized resolved platform cook settings to carry on the work item.</param>
+    /// <returns>Platform cook work item.</returns>
+    static PlatformCookWorkItem CreateWorkItem(string sourcePath, string sourceAssetKind, string outputRelativePath, string serializedPlatformSettings) {
         return new PlatformCookWorkItem(
             "work-1",
             sourcePath,
@@ -333,11 +399,7 @@ public sealed class Nintendo64TextureCookTests {
             "icon",
             "source-hash",
             "settings-hash",
-            Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
-                MaxResolution = 64,
-                ColorFormat = TextureAssetColorFormat.Rgba32,
-                AlphaPrecision = TextureAssetAlphaPrecision.A8
-            }),
+            serializedPlatformSettings,
             []);
     }
 }
