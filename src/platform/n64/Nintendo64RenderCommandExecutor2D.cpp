@@ -28,13 +28,6 @@ namespace {
 /// introduced it, so an authored shape keeps the same silhouette.
 constexpr int32_t kRoundedRectRingSteps = 32;
 
-/// Deepest nesting `Nintendo64ClipRectStack` accepts before its own `Push` throws `std::length_error`.
-/// Mirrored here rather than read through a public accessor on that class: `MaximumDepth` is a private
-/// implementation detail the stack does not otherwise need to expose, and duplicating the one number it
-/// takes to decide "would this push overflow" is cheaper than widening that class's public surface just so
-/// this guard can announce the failure on the debug channel before the exception fires.
-constexpr int32_t kMaximumClipStackDepth = 16;
-
 /// Tolerance used when deciding whether a resolved rotation is effectively zero.  Authored quaternions arrive
 /// as cooked floats and `rotationRadians` is an `atan2` of a rotated unit vector derived from one, so a
 /// visually unrotated sprite can still arrive with a rotation of a few times 1e-5 to 1e-6 radians of
@@ -74,9 +67,9 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
         const ::RenderCommand2DType commandType = commandList->GetCommandType(commandIndex);
         if (commandType == ::RenderCommand2DType::ClipPush) {
             // `Push` throws a bare `std::length_error` past this depth, with no trace of its own.  Checking
-            // `Depth()` first, rather than catching the exception, lets the debug channel say what happened
-            // before the ROM goes down.
-            if (clipStack.Depth() >= kMaximumClipStackDepth) {
+            // `Depth()` against the stack's own public limit, rather than catching the exception or mirroring
+            // the number here, means this guard and `Push`'s own check cannot drift out of sync.
+            if (clipStack.Depth() >= Nintendo64ClipRectStack::MaximumDepth) {
                 debugf("n64:error clip-stack-overflow\n");
                 throw new InvalidOperationException("N64 clip stack cannot nest past its fixed depth.");
             }

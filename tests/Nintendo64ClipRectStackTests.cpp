@@ -128,6 +128,27 @@ void TestPushPastTheDepthLimitThrows() {
     Check(threw, "pushing past the depth limit throws");
 }
 
+/// `MaximumDepth` is public precisely so a caller can check it before pushing and report an overflow itself,
+/// rather than letting `Push`'s bare `std::length_error` escape untraced.  This test proves that contract:
+/// pushing exactly the limit must succeed, and only the push past it may throw.  Written against the constant
+/// rather than a literal 16, so it keeps proving the contract if the limit ever changes.
+void TestPushingExactlyTheDepthLimitSucceeds() {
+    Nintendo64ClipRectStack stack(320, 240);
+    for (int32_t index = 0; index < Nintendo64ClipRectStack::MaximumDepth; ++index) {
+        stack.Push(0.0f, 0.0f, 320.0f, 240.0f);
+    }
+    Check(stack.Depth() == Nintendo64ClipRectStack::MaximumDepth,
+          "pushing exactly the limit reaches that depth without throwing");
+
+    bool threw = false;
+    try {
+        stack.Push(0.0f, 0.0f, 320.0f, 240.0f);
+    } catch (const std::length_error&) {
+        threw = true;
+    }
+    Check(threw, "one more push past exactly the limit still throws");
+}
+
 /// Asymmetric frame and nested push with distinct X and Y values catch X/Y axis confusion.
 void TestAxisCoverageWithAsymmetricFrame() {
     Nintendo64ClipRectStack stack(320, 240);
@@ -177,6 +198,7 @@ int main() {
     TestPopRestoresTheEnclosingRect();
     TestPopOnAnEmptyStackThrows();
     TestPushPastTheDepthLimitThrows();
+    TestPushingExactlyTheDepthLimitSucceeds();
     TestAxisCoverageWithAsymmetricFrame();
     TestConstructorThrowsOnNonPositiveWidth();
     TestConstructorThrowsOnNonPositiveHeight();

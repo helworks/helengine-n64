@@ -25,6 +25,12 @@ struct Nintendo64ClipRect {
 /// levels, and a heap allocation inside the frame loop is not worth the generality.
 class Nintendo64ClipRectStack {
 public:
+    /// Deepest nesting the stack accepts before `Push` refuses and throws.  Public, and not merely an
+    /// implementation detail, because a caller has to be able to check it before pushing: comparing
+    /// `Depth()` against this limit lets the caller report an overflow on its own terms - with whatever
+    /// trace its platform requires - rather than letting `Push`'s bare `std::length_error` escape unannounced.
+    static constexpr int32_t MaximumDepth = 16;
+
     /// Builds one stack whose base rectangle is the whole frame.
     /// <param name="frameWidth">Frame-buffer width in pixels.</param>
     /// <param name="frameHeight">Frame-buffer height in pixels.</param>
@@ -49,8 +55,6 @@ public:
     int32_t Depth() const;
 
 private:
-    /// Deepest nesting the stack accepts before it refuses to push.
-    static constexpr int32_t MaximumDepth = 16;
     /// Clip rectangle covering the whole frame, used when nothing is pushed.
     Nintendo64ClipRect FrameRect;
     /// Resolved rectangles, one per pushed level.
