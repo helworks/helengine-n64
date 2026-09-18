@@ -114,6 +114,44 @@ void TestRoundToIntRoundsHalvesAway() {
     Check(Nintendo64QuadBlitGeometry::RoundToInt(-7.5f) == -8, "-7.5 rounds away from zero");
 }
 
+/// A sub-rect entirely cropped away on the X axis must be reported as an empty source, not as a zero-width
+/// drawable.  A regression changing the crop guards from <= to < would silently miss this case.
+void TestXAxisCropThatRemovesAllTexelsReportsEmptySource() {
+    const Nintendo64QuadBlitGeometry2D geometry =
+        Nintendo64QuadBlitGeometry::Resolve(64, 64, -1.0f, 0.0f, 0.5f, 1.0f, 0.0f, 0.0f, 32.0f, 64.0f);
+
+    Check(geometry.Kind == Nintendo64QuadBlitKind::EmptySource, "a negative offset and small width crop away entirely");
+}
+
+/// A sub-rect entirely cropped away on the Y axis must be reported as an empty source. This guards against
+/// a copy-paste bug where the Y crop uses sourceWidth instead of sourceHeight, or uses the wrong offset.
+void TestYAxisCropThatRemovesAllTexelsReportsEmptySource() {
+    const Nintendo64QuadBlitGeometry2D geometry =
+        Nintendo64QuadBlitGeometry::Resolve(64, 128, 0.0f, -1.0f, 1.0f, 0.5f, 0.0f, 0.0f, 64.0f, 32.0f);
+
+    Check(geometry.Kind == Nintendo64QuadBlitKind::EmptySource, "a negative Y offset and small height crop away entirely on the Y axis");
+}
+
+/// A non-trivial near-edge crop on the Y axis, mirroring the X-axis crop test but with asymmetric dimensions
+/// to catch copy-paste bugs that read sourceWidth instead of sourceHeight.
+void TestYAxisSubRectBeforeTheNearEdgeIsCropped() {
+    const Nintendo64QuadBlitGeometry2D geometry =
+        Nintendo64QuadBlitGeometry::Resolve(64, 128, 0.0f, -0.25f, 1.0f, 0.5f, 0.0f, 0.0f, 64.0f, 32.0f);
+
+    Check(geometry.SourceY == 0, "a sub-rect starting off the near edge begins at texel zero");
+    Check(geometry.SourceHeight == 32, "the 32 texels that fell off the near edge are dropped, not shifted (64 - 32 = 32)");
+}
+
+/// A non-trivial far-edge clamp on the Y axis, mirroring the X-axis clamp test but with asymmetric dimensions
+/// to catch copy-paste bugs that read sourceWidth instead of sourceHeight.
+void TestYAxisSubRectPastTheFarEdgeIsClamped() {
+    const Nintendo64QuadBlitGeometry2D geometry =
+        Nintendo64QuadBlitGeometry::Resolve(64, 128, 0.0f, 0.75f, 1.0f, 0.5f, 0.0f, 0.0f, 64.0f, 32.0f);
+
+    Check(geometry.SourceY == 96, "0.75 of 128 texels is texel 96");
+    Check(geometry.SourceHeight == 32, "only the 32 texels up to the far edge survive (128 - 96 = 32)");
+}
+
 } // namespace
 
 int main() {
@@ -126,6 +164,10 @@ int main() {
     TestZeroAreaDestinationReportsEmptyDestination();
     TestNonPositiveTextureSizeReportsEmptySource();
     TestRoundToIntRoundsHalvesAway();
+    TestXAxisCropThatRemovesAllTexelsReportsEmptySource();
+    TestYAxisCropThatRemovesAllTexelsReportsEmptySource();
+    TestYAxisSubRectBeforeTheNearEdgeIsCropped();
+    TestYAxisSubRectPastTheFarEdgeIsClamped();
     if (failures != 0) {
         std::fprintf(stderr, "%d quad-blit-geometry test(s) failed\n", failures);
         return 1;
