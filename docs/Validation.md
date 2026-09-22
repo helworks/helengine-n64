@@ -1015,3 +1015,24 @@ budget" warnings during the crashing run, so a host-side stall being read as a
 200 ms RSP timeout is a live alternative. The command-list trace refuted one
 theory outright: there are zero clip commands in the frame, so no degenerate
 scissor rectangle is ever issued.
+
+### Follow-up: MSD cook settings and native timing (2026-09-22)
+
+The `sd/msd` authoring group now covers N64 and PS1. Its 240p assets use
+user-side cook settings: DemoDiscBody remains available at 21px with a
+256-wide atlas, and each MSD platform's three control textures are cooked at
+27px, 27px, and 26px. The regenerated console Blueprint persists the group-scoped panel
+overrides, including explicit N64/PS1 camera and light icon mappings. On MSD,
+the FPS row, status/scene labels, and Camera/Light labels all use the generated
+editor UI font; the panel labels use scope scale `2.667` to compensate for the
+1.5x panel transform, and their vertical offsets center the text lines against
+the 48px and 46px icon rows. The final native build stages 41 cooked files and
+produces ROM SHA-256
+`055763c059263a3f486e870dd09ce1ace7ea5d72bf5372b1535fe6d0aae76a1e`.
+
+The N64 codegen profile now uses the platform monotonic provider backed by
+`get_ticks_us()` instead of hosted `std::chrono`. The generated Stopwatch test
+passes, and the final ROM reports a real render duration (`0.5 ms`) in the FPS
+row. Eight additional sequential 30-second Gopher64 runs all reached
+`first-frame-complete` without an RSP crash, timeout, or `n64:error`; the
+intermittent RSP hang therefore remains un-reproduced and unresolved.

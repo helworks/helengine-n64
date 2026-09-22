@@ -48,6 +48,11 @@ public static class Nintendo64PlatformDefinitionFactory {
     public const string UseStdChronoSettingId = "codegen-use-std-chrono";
 
     /// <summary>
+    /// Codegen option id selecting the N64 monotonic runtime-provider header.
+    /// </summary>
+    public const string RuntimeProviderHeaderSettingId = "codegen-runtime-provider-header";
+
+    /// <summary>
     /// Codegen option id selecting <c>std::shared_ptr</c> as the generated Core's shared span ownership.
     /// </summary>
     public const string UseStdSharedPtrSettingId = "codegen-use-std-shared-ptr";
@@ -111,7 +116,10 @@ public static class Nintendo64PlatformDefinitionFactory {
                 new(UseStdUnorderedMapSettingId, "Use std::unordered_map", PlatformSettingKind.Boolean, "true", true, []),
                 new(UseStdUnorderedSetSettingId, "Use std::unordered_set", PlatformSettingKind.Boolean, "true", true, []),
                 new(UseStdFunctionSettingId, "Use std::function", PlatformSettingKind.Boolean, "true", true, []),
-                new(UseStdChronoSettingId, "Use std::chrono", PlatformSettingKind.Boolean, "true", true, []),
+                // libdragon's hosted gettimeofday path is unavailable on the console. The N64 provider
+                // routes Stopwatch through get_ticks_us(), which is the platform's monotonic clock.
+                new(UseStdChronoSettingId, "Use std::chrono", PlatformSettingKind.Boolean, "false", true, []),
+                new(RuntimeProviderHeaderSettingId, "Runtime Provider Header", PlatformSettingKind.Text, "platform/n64/Nintendo64RuntimeProvider.hpp", true, []),
                 new(UseStdSharedPtrSettingId, "Use std::shared_ptr", PlatformSettingKind.Boolean, "true", true, []),
                 new(UseStdMathSettingId, "Use Standard Math", PlatformSettingKind.Boolean, "true", true, []),
                 new(UseHostedFileSystemSettingId, "Use Hosted File System", PlatformSettingKind.Boolean, "true", true, []),

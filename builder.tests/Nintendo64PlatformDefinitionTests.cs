@@ -64,7 +64,7 @@ public sealed class Nintendo64PlatformDefinitionTests {
             [Nintendo64PlatformDefinitionFactory.UseStdUnorderedMapSettingId] = "true",
             [Nintendo64PlatformDefinitionFactory.UseStdUnorderedSetSettingId] = "true",
             [Nintendo64PlatformDefinitionFactory.UseStdFunctionSettingId] = "true",
-            [Nintendo64PlatformDefinitionFactory.UseStdChronoSettingId] = "true",
+            [Nintendo64PlatformDefinitionFactory.UseStdChronoSettingId] = "false",
             [Nintendo64PlatformDefinitionFactory.UseStdSharedPtrSettingId] = "true",
             [Nintendo64PlatformDefinitionFactory.UseStdMathSettingId] = "true",
             [Nintendo64PlatformDefinitionFactory.UseHostedFileSystemSettingId] = "true",
@@ -82,6 +82,16 @@ public sealed class Nintendo64PlatformDefinitionTests {
         Assert.All(
             definition.CodegenProfiles.Single().Settings.Where(setting => setting.SettingId.StartsWith("codegen-use-", StringComparison.Ordinal)),
             setting => Assert.Equal(PlatformSettingKind.Boolean, setting.SettingKind));
+    }
+
+    [Fact]
+    public void Create_UsesNativeMonotonicClockProvider() {
+        PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+        PlatformSettingDefinition provider = Assert.Single(definition.CodegenProfiles.Single().Settings,
+            setting => setting.SettingId == "codegen-runtime-provider-header");
+
+        Assert.Equal(PlatformSettingKind.Text, provider.SettingKind);
+        Assert.Equal("platform/n64/Nintendo64RuntimeProvider.hpp", provider.DefaultValue);
     }
 
     [Fact]
