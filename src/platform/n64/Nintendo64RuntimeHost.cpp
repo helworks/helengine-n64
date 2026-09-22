@@ -2,12 +2,17 @@
 
 #if HELENGINE_N64_HAS_GENERATED_CORE
 
+#include <algorithm>
+#include <cmath>
+
 #include <libdragon.h>
 
 #include "AmbientLightComponent.hpp"
+#include "CameraClearSettings.hpp"
 #include "Core.hpp"
 #include "CoreInitializationOptions.hpp"
 #include "DirectionalLightComponent.hpp"
+#include "ICamera.hpp"
 #include "PlatformInfo.hpp"
 #include "RuntimeSceneCatalog.hpp"
 #include "SceneLoadMode.hpp"
@@ -25,6 +30,15 @@
 extern "C" const char* he_get_runtime_startup_scene_id();
 
 namespace helengine::n64 {
+
+namespace {
+
+uint8_t ToRgbaByte(float channel) {
+    const float clamped = std::clamp(channel, 0.0f, 1.0f);
+    return static_cast<uint8_t>(std::lround(clamped * 255.0f));
+}
+
+} // namespace
 
 bool Nintendo64RuntimeHost::Initialize() {
     debug_init_isviewer();
@@ -101,6 +115,21 @@ bool Nintendo64RuntimeHost::Initialize() {
     if (cameraCount != 1 || drawableCount != 1) {
         debugf("n64:error authored-scene-cardinality\n");
         return false;
+    }
+    ::ICamera* camera = (*objectManager->get_Cameras()).get_Item(0);
+    if (camera != nullptr) {
+        ::CameraClearSettings clearSettings = camera->get_ClearSettings();
+        if (clearSettings.get_ClearColorEnabled()) {
+            const ::float4 clearColor = clearSettings.get_ClearColor();
+            const uint8_t red = ToRgbaByte(clearColor.X);
+            const uint8_t green = ToRgbaByte(clearColor.Y);
+            const uint8_t blue = ToRgbaByte(clearColor.Z);
+            const uint8_t alpha = ToRgbaByte(clearColor.W);
+            Video.SetClearColor(red, green, blue, alpha);
+            debugf("n64:camera-clear rgba=%ld/%ld/%ld/%ld\n",
+                   static_cast<long>(red), static_cast<long>(green),
+                   static_cast<long>(blue), static_cast<long>(alpha));
+        }
     }
     if (directionalLightCount > kMaxDirectionalLights) {
         debugf("n64:error directional-light-limit count=%ld\n", directionalLightCount);

@@ -39,8 +39,15 @@ bool Nintendo64Video::BeginFrame() {
     return true;
 }
 
+void Nintendo64Video::SetClearColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) {
+    ClearRed = red;
+    ClearGreen = green;
+    ClearBlue = blue;
+    ClearAlpha = alpha;
+}
+
 void Nintendo64Video::Clear() {
-    rdpq_clear(RGBA32(16, 18, 24, 255));
+    rdpq_clear(RGBA32(ClearRed, ClearGreen, ClearBlue, ClearAlpha));
     rdpq_clear_z(ZBUF_MAX);
 }
 

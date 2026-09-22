@@ -1024,11 +1024,11 @@ user-side cook settings: DemoDiscBody remains available at 21px with a
 27px, 27px, and 26px. The regenerated console Blueprint persists the group-scoped panel
 overrides, including explicit N64/PS1 camera and light icon mappings. On MSD,
 the FPS row, status/scene labels, and Camera/Light labels all use the generated
-editor UI font; the panel labels use scope scale `2.667` to compensate for the
-1.5x panel transform, and their vertical offsets center the text lines against
-the 48px and 46px icon rows. The final native build stages 41 cooked files and
+editor UI font at scope scale 4; text geometry resolves directly from FontScale,
+so the panel transform does not require compensation. Their vertical offsets center
+the text lines against the 48px and 46px icon rows. The N64 host now applies the authored camera clear color, logged as RGBA 100/149/237/255. The final native build stages 41 cooked files and
 produces ROM SHA-256
-`055763c059263a3f486e870dd09ce1ace7ea5d72bf5372b1535fe6d0aae76a1e`.
+`9538ed23ca0cb8f70914fedb4657ad38579bc31339edf0fbb8e32b691c1ff65f`.
 
 The N64 codegen profile now uses the platform monotonic provider backed by
 `get_ticks_us()` instead of hosted `std::chrono`. The generated Stopwatch test
