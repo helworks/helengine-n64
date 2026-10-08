@@ -1,5 +1,9 @@
 #include "Nintendo64Video.hpp"
 
+#if HELENGINE_N64_CPU_PROFILE
+#include "platform/n64/Nintendo64CpuProfileSink.hpp"
+#endif
+
 namespace helengine::n64 {
 
 bool Nintendo64Video::Initialize() {
@@ -59,7 +63,15 @@ bool Nintendo64Video::EndFrame() {
 
     // This explicit wait is the ownership boundary for mutable matrices and
     // geometry introduced by the renderer in later checkpoints.
+#if HELENGINE_N64_CPU_PROFILE
+    const std::uint64_t waitStart = CpuProfile->ReadMicroseconds();
+#endif
     rdpq_detach_wait();
+#if HELENGINE_N64_CPU_PROFILE
+    const std::uint64_t waitEnd = CpuProfile->ReadMicroseconds();
+    if (waitEnd >= waitStart) CpuProfile->RecordNativeStage(Nintendo64CpuProfileSink::RdpqDetachWait, waitEnd - waitStart);
+    else CpuProfile->ClockFault();
+#endif
     display_show(CurrentFrame);
     CurrentFrame = nullptr;
     return true;

@@ -8,6 +8,8 @@ namespace helengine::n64 {
 enum class Nintendo64RoundedRectGeometryKind {
     /// The rectangle covers a positive area on both axes, so the fill ring is worth building.
     Drawable,
+    /// The rectangle has square corners and can use the RDP's direct rectangle primitive.
+    AxisAlignedRectangle,
     /// The destination collapsed to nothing once the parent scale was applied, so the fill would cover no
     /// pixels at all.
     EmptyDestination

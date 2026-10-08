@@ -4,6 +4,10 @@
 
 namespace helengine::n64 {
 
+#if HELENGINE_N64_CPU_PROFILE
+class Nintendo64CpuProfileSink;
+#endif
+
 class Nintendo64Video {
 public:
     bool Initialize();
@@ -11,6 +15,9 @@ public:
     void SetClearColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha = 255);
     void Clear();
     bool EndFrame();
+#if HELENGINE_N64_CPU_PROFILE
+    void SetCpuProfileSink(Nintendo64CpuProfileSink* sink) { CpuProfile = sink; }
+#endif
     void Shutdown();
 
 private:
@@ -22,6 +29,9 @@ private:
     uint8_t ClearAlpha = 255;
     bool DisplayInitialized = false;
     bool RdpqInitialized = false;
+#if HELENGINE_N64_CPU_PROFILE
+    Nintendo64CpuProfileSink* CpuProfile = nullptr;
+#endif
 };
 
 } // namespace helengine::n64

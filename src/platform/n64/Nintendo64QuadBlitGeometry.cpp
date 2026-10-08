@@ -8,6 +8,25 @@ int32_t Nintendo64QuadBlitGeometry::RoundToInt(float value) {
     return static_cast<int32_t>(std::round(value));
 }
 
+Nintendo64QuadBlitRotation2D Nintendo64QuadBlitGeometry::ResolveRotation(
+    const Nintendo64QuadBlitGeometry2D& geometry, float rotationRadians) {
+    const int32_t sourceCenterX = geometry.SourceWidth / 2;
+    const int32_t sourceCenterY = geometry.SourceHeight / 2;
+    const float centerOffsetX = sourceCenterX * geometry.ScaleX;
+    const float centerOffsetY = sourceCenterY * geometry.ScaleY;
+    const float cosine = std::cos(rotationRadians);
+    const float sine = std::sin(rotationRadians);
+    // The command's position is already the transformed top-left. libdragon
+    // places the source hotspot at the supplied screen anchor, and its positive
+    // theta rotates counter-clockwise in screen space.
+    return Nintendo64QuadBlitRotation2D{
+        static_cast<float>(geometry.DestinationX) + cosine * centerOffsetX - sine * centerOffsetY,
+        static_cast<float>(geometry.DestinationY) + sine * centerOffsetX + cosine * centerOffsetY,
+        sourceCenterX,
+        sourceCenterY,
+        -rotationRadians};
+}
+
 Nintendo64QuadBlitGeometry2D Nintendo64QuadBlitGeometry::Resolve(int32_t textureWidth, int32_t textureHeight,
                                                                  float sourceRectX, float sourceRectY,
                                                                  float sourceRectWidth, float sourceRectHeight,

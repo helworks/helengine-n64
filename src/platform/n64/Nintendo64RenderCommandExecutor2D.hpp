@@ -31,7 +31,8 @@ private:
     /// <param name="sourceRect">Normalized source rectangle into the texture.</param>
     /// <param name="color">Primitive colour the flat combiner modulates the texel with.</param>
     /// <param name="isGlyph">True when the quad came from a glyph command, which changes only tracing.</param>
-    void BlitQuad(::RuntimeTexture* texture, ::float4 bounds, ::float4 sourceRect, ::byte4 color, bool isGlyph);
+    void BlitQuad(::RuntimeTexture* texture, ::float4 bounds, ::float4 sourceRect, ::byte4 color, bool isGlyph,
+                  float rotationRadians = 0.0f);
 
     /// Fills one rounded rectangle as a flat-coloured triangle fan and restores the textured combiner.
     /// <param name="commandList">List the command was read from.</param>

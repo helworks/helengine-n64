@@ -118,3 +118,48 @@ $clipRectRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
     'helengine-n64-build', './build/n64-clip-rect-stack-tests')
 & docker @clipRectRun
 if ($LASTEXITCODE -ne 0) { throw 'N64 clip-rect-stack tests failed.' }
+
+$cpuProfileCompile = @(
+    'run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', 'g++',
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-pedantic',
+    '-I.', 'tests/Nintendo64CpuProfileWindowTests.cpp', 'src/platform/n64/Nintendo64CpuProfileWindow.cpp',
+    'src/platform/n64/Nintendo64CpuProfileTypeName.cpp',
+    '-o', 'build/n64-cpu-profile-window-tests'
+)
+& docker @cpuProfileCompile
+if ($LASTEXITCODE -ne 0) { throw 'N64 CPU profile window test compilation failed.' }
+$cpuProfileRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', './build/n64-cpu-profile-window-tests')
+& docker @cpuProfileRun
+if ($LASTEXITCODE -ne 0) { throw 'N64 CPU profile window tests failed.' }
+
+$buildRoot = (Resolve-Path (Join-Path $root 'build')).Path
+$probeName = 'n64-make-clean-probe-' + [Guid]::NewGuid().ToString('N')
+$probeRoot = [IO.Path]::GetFullPath((Join-Path $buildRoot $probeName))
+$buildPrefix = $buildRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+if (-not $probeRoot.StartsWith($buildPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Make clean probe escaped the build directory: $probeRoot"
+}
+$probeWorkspace = Join-Path $probeRoot 'workspace'
+$probeCache = Join-Path $probeRoot 'cache'
+New-Item -ItemType Directory -Force -Path $probeWorkspace, $probeCache | Out-Null
+try {
+    Copy-Item -LiteralPath (Join-Path $root 'Makefile') -Destination (Join-Path $probeWorkspace 'Makefile')
+    Set-Content -LiteralPath (Join-Path $probeWorkspace 'helengine_n64.z64') -Value 'probe' -NoNewline
+    Set-Content -LiteralPath (Join-Path $probeCache 'sentinel.o') -Value 'probe' -NoNewline
+    $cleanCache = @(
+        'run', '--rm',
+        '-v', "${probeWorkspace}:/workspace",
+        '-v', "${probeCache}:/n64-native-cache",
+        '-w', '/workspace', 'helengine-n64-build', 'make',
+        'BUILD_DIR=/n64-native-cache', 'clean'
+    )
+    & docker @cleanCache
+    if ($LASTEXITCODE -ne 0) { throw 'N64 make clean failed for a mounted native object cache.' }
+    if (-not (Test-Path -LiteralPath $probeCache)) { throw 'N64 make clean removed the native cache mount point.' }
+    if (Test-Path -LiteralPath (Join-Path $probeCache 'sentinel.o')) { throw 'N64 make clean left a native cache object behind.' }
+    if (Test-Path -LiteralPath (Join-Path $probeWorkspace 'helengine_n64.z64')) { throw 'N64 make clean left the ROM behind.' }
+} finally {
+    if (Test-Path -LiteralPath $probeRoot) { Remove-Item -LiteralPath $probeRoot -Recurse -Force }
+}

@@ -9,6 +9,7 @@ namespace {
 using helengine::n64::Nintendo64QuadBlitGeometry;
 using helengine::n64::Nintendo64QuadBlitGeometry2D;
 using helengine::n64::Nintendo64QuadBlitKind;
+using helengine::n64::Nintendo64QuadBlitRotation2D;
 
 int failures = 0;
 
@@ -172,6 +173,36 @@ void TestYAxisCropThatLandsOnExactlyZeroReportsEmptySource() {
     Check(geometry.Kind == Nintendo64QuadBlitKind::EmptySource, "a crop that lands on exactly zero height is empty");
 }
 
+/// libdragon's source hotspot must land at the transformed center, with its CCW angle adapted to the shared screen-space basis.
+void TestRotatedQuadUsesItsDestinationAndSourceCenters() {
+    const Nintendo64QuadBlitGeometry2D geometry =
+        Nintendo64QuadBlitGeometry::Resolve(64, 128, 0.25f, 0.25f, 0.5f, 0.25f, 10.4f, 20.6f, 30.0f, 10.0f);
+    const Nintendo64QuadBlitRotation2D rotation =
+        Nintendo64QuadBlitGeometry::ResolveRotation(geometry, 1.5707963267948966f);
+
+    Check(std::fabs(rotation.AnchorX - 5.0f) < 0.0001f, "90 degree rotation keeps transformed left origin");
+    Check(std::fabs(rotation.AnchorY - 36.0f) < 0.0001f, "90 degree rotation moves center along rotated right basis");
+    Check(rotation.CenterX == 16, "rotation hotspot uses the sampled source width");
+    Check(rotation.CenterY == 16, "rotation hotspot uses the sampled source height");
+    Check(rotation.RotationRadians == -1.5707963267948966f, "libdragon's CCW angle matches shared clockwise screen coordinates");
+}
+
+void TestRotatedMenuBackgroundKeepsItsAuthoredCenter() {
+    // A world-space top-left for a 384x512 quad rotated 90 degrees around
+    // framebuffer center (160,120), as produced by the authored hierarchy.
+    const auto geometry = Nintendo64QuadBlitGeometry::Resolve(256, 256, 0, 0, 1, 1, 416, -72, 384, 512);
+    const auto rotation = Nintendo64QuadBlitGeometry::ResolveRotation(geometry, 1.5707963267948966f);
+    Check(std::fabs(rotation.AnchorX - 160.0f) < 0.0001f, "rotating background keeps authored center X");
+    Check(std::fabs(rotation.AnchorY - 120.0f) < 0.0001f, "rotating background keeps authored center Y");
+}
+
+void TestOddSourceHotspotPreservesTopLeft() {
+    const auto geometry = Nintendo64QuadBlitGeometry::Resolve(31, 17, 0, 0, 1, 1, 10, 20, 62, 51);
+    const auto rotation = Nintendo64QuadBlitGeometry::ResolveRotation(geometry, 1.5707963267948966f);
+    Check(std::fabs(rotation.AnchorX - (-14.0f)) < 0.0001f, "integer source hotspot preserves odd-width quad origin X");
+    Check(std::fabs(rotation.AnchorY - 50.0f) < 0.0001f, "integer source hotspot preserves odd-height quad origin Y");
+}
+
 } // namespace
 
 int main() {
@@ -190,6 +221,9 @@ int main() {
     TestYAxisSubRectPastTheFarEdgeIsClamped();
     TestXAxisCropThatLandsOnExactlyZeroReportsEmptySource();
     TestYAxisCropThatLandsOnExactlyZeroReportsEmptySource();
+    TestRotatedQuadUsesItsDestinationAndSourceCenters();
+    TestRotatedMenuBackgroundKeepsItsAuthoredCenter();
+    TestOddSourceHotspotPreservesTopLeft();
     if (failures != 0) {
         std::fprintf(stderr, "%d quad-blit-geometry test(s) failed\n", failures);
         return 1;

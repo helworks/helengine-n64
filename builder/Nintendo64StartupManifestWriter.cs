@@ -22,7 +22,7 @@ public sealed class Nintendo64StartupManifestWriter {
         builder.AppendLine("extern \"C\" const char* he_get_runtime_startup_scene_id();");
         builder.AppendLine("extern \"C\" const HERuntimeSceneCatalogEntry* he_runtime_scene_catalog_entries(std::size_t* count);");
         string headerPath = Path.Combine(root, "n64_runtime_scene_catalog.hpp");
-        File.WriteAllText(headerPath, builder.ToString(), new UTF8Encoding(false));
+        WriteIfChanged(headerPath, builder.ToString());
         StringBuilder source = new();
         source.AppendLine("#include \"n64_runtime_scene_catalog.hpp\"");
         source.AppendLine("namespace {");
@@ -38,7 +38,7 @@ public sealed class Nintendo64StartupManifestWriter {
         source.AppendLine("extern \"C\" const char* he_get_runtime_startup_scene_id() { return kStartupSceneId; }");
         source.AppendLine("extern \"C\" const HERuntimeSceneCatalogEntry* he_runtime_scene_catalog_entries(std::size_t* count) { if (count != nullptr) *count = sizeof(kEntries) / sizeof(kEntries[0]); return kEntries; }");
         string sourcePath = Path.Combine(root, "n64_runtime_scene_catalog.cpp");
-        File.WriteAllText(sourcePath, source.ToString(), new UTF8Encoding(false));
+        WriteIfChanged(sourcePath, source.ToString());
         return headerPath;
     }
 
@@ -61,4 +61,9 @@ public sealed class Nintendo64StartupManifestWriter {
     }
 
     static string Escape(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal).Replace("\r", "\\r", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal);
+
+    static void WriteIfChanged(string path, string content) {
+        if (File.Exists(path) && string.Equals(File.ReadAllText(path), content, StringComparison.Ordinal)) return;
+        File.WriteAllText(path, content, new UTF8Encoding(false));
+    }
 }

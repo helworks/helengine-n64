@@ -19,10 +19,14 @@ public sealed class Nintendo64PlatformDefinitionTests {
         PlatformMaterialFieldDefinition lighting = Assert.Single(schema.Fields, field => field.FieldId == Nintendo64MaterialSchemaIds.LightingModeFieldId);
         Assert.Equal("lit", lighting.DefaultValue);
         Assert.Equal(new[] { "lit", "unlit" }, lighting.AllowedValues);
-        Assert.Equal(new[] { "debug", "release" }, definition.BuildProfiles.Select(profile => profile.ProfileId));
+        Assert.Equal(new[] { "debug", "release", "cpu-profile" }, definition.BuildProfiles.Select(profile => profile.ProfileId));
+        PlatformBuildProfileDefinition cpuProfile = Assert.Single(definition.BuildProfiles, profile => profile.ProfileId == "cpu-profile");
+        Assert.Equal(Nintendo64PlatformDefinitionFactory.CpuProfileCodegenProfileId, cpuProfile.CodegenProfileId);
         Assert.All(definition.BuildProfiles, profile => Assert.Equal("n64-standard", profile.GraphicsProfileId));
+        PlatformCodegenProfileDefinition profiled = Assert.Single(definition.CodegenProfiles, profile => profile.ProfileId == "cpu-profile");
+        Assert.Contains(profiled.Settings, setting => setting.SettingId == PlatformCodegenSettingIds.EnabledFeatures && setting.DefaultValue == "runtime_profiler");
         PlatformSettingDefinition forcedDisabled = Assert.Single(
-            definition.CodegenProfiles.Single().Settings,
+            definition.CodegenProfiles.Single(profile => profile.ProfileId == "default").Settings,
             setting => setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures);
         Assert.Contains("shaders", forcedDisabled.DefaultValue, StringComparison.OrdinalIgnoreCase);
         // `text2d` was removed deliberately. Listing it never closed the gate: feature pruning restores a gated
@@ -39,10 +43,10 @@ public sealed class Nintendo64PlatformDefinitionTests {
         PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
 
         PlatformSettingDefinition useExceptions = Assert.Single(
-            definition.CodegenProfiles.Single().Settings,
+            definition.CodegenProfiles.Single(profile => profile.ProfileId == "default").Settings,
             setting => setting.SettingId == Nintendo64PlatformDefinitionFactory.UseExceptionsSettingId);
         PlatformSettingDefinition useRtti = Assert.Single(
-            definition.CodegenProfiles.Single().Settings,
+            definition.CodegenProfiles.Single(profile => profile.ProfileId == "default").Settings,
             setting => setting.SettingId == Nintendo64PlatformDefinitionFactory.UseRttiSettingId);
         Assert.Equal("true", useExceptions.DefaultValue);
         Assert.Equal("true", useRtti.DefaultValue);
@@ -73,21 +77,21 @@ public sealed class Nintendo64PlatformDefinitionTests {
         };
 
         Dictionary<string, string> declaredCodegenUseSettings = definition.CodegenProfiles
-            .Single()
+            .Single(profile => profile.ProfileId == "default")
             .Settings
             .Where(setting => setting.SettingId.StartsWith("codegen-use-", StringComparison.Ordinal))
             .ToDictionary(setting => setting.SettingId, setting => setting.DefaultValue, StringComparer.Ordinal);
 
         Assert.Equal(expectedCodegenUseSettings.OrderBy(entry => entry.Key, StringComparer.Ordinal), declaredCodegenUseSettings.OrderBy(entry => entry.Key, StringComparer.Ordinal));
         Assert.All(
-            definition.CodegenProfiles.Single().Settings.Where(setting => setting.SettingId.StartsWith("codegen-use-", StringComparison.Ordinal)),
+            definition.CodegenProfiles.Single(profile => profile.ProfileId == "default").Settings.Where(setting => setting.SettingId.StartsWith("codegen-use-", StringComparison.Ordinal)),
             setting => Assert.Equal(PlatformSettingKind.Boolean, setting.SettingKind));
     }
 
     [Fact]
     public void Create_UsesNativeMonotonicClockProvider() {
         PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
-        PlatformSettingDefinition provider = Assert.Single(definition.CodegenProfiles.Single().Settings,
+        PlatformSettingDefinition provider = Assert.Single(definition.CodegenProfiles.Single(profile => profile.ProfileId == "default").Settings,
             setting => setting.SettingId == "codegen-runtime-provider-header");
 
         Assert.Equal(PlatformSettingKind.Text, provider.SettingKind);
@@ -113,9 +117,7 @@ public sealed class Nintendo64PlatformDefinitionTests {
     public void Create_DoesNotOptIntoCodegenFeaturesForMinimalN64Profile() {
         PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
 
-        Assert.DoesNotContain(
-            definition.CodegenProfiles.Single().Settings,
-            setting => setting.SettingId == PlatformCodegenSettingIds.EnabledFeatures);
+        Assert.DoesNotContain(definition.CodegenProfiles.Single(profile => profile.ProfileId == "default").Settings, setting => setting.SettingId == PlatformCodegenSettingIds.EnabledFeatures);
     }
 
     [Fact]
@@ -132,12 +134,14 @@ public sealed class Nintendo64PlatformDefinitionTests {
             .Where(featureId => !string.IsNullOrWhiteSpace(featureId))
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (PlatformSettingDefinition setting in definition.CodegenProfiles.Single().Settings.Where(setting =>
+        foreach (PlatformSettingDefinition setting in definition.CodegenProfiles.SelectMany(profile => profile.Settings).Where(setting =>
                      setting.SettingId == PlatformCodegenSettingIds.EnabledFeatures
                      || setting.SettingId == PlatformCodegenSettingIds.ForcedDisabledFeatures)) {
             foreach (string featureId in (setting.DefaultValue ?? string.Empty).Split(
                          [';', ',', ' '],
                          StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
+                // This opt-in marker is consumed by the editor preprocessor resolver rather than the feature catalog.
+                if (string.Equals(featureId, "runtime_profiler", StringComparison.Ordinal)) continue;
                 Assert.Contains(featureId, knownFeatureIds);
             }
         }
@@ -228,7 +232,7 @@ public sealed class Nintendo64PlatformDefinitionTests {
     /// <summary>
     /// Ensures the font-atlas-texture capability is a distinct builder-owned capability from the plain texture
     /// capability, with its own settings contract id and its own, much higher resolution cap: the shared
-    /// "texture" cap of 64 crushes the editor default (256x128) and demo disc body (256x256) font atlases to
+    /// "texture" cap of 64 crushes the editor default (256x128) and authored body (512x256) font atlases to
     /// two or three pixel glyphs, which is exactly what a second capability exists to avoid.
     /// </summary>
     [Fact]
@@ -253,7 +257,7 @@ public sealed class Nintendo64PlatformDefinitionTests {
             Nintendo64TextureCookSettingsSerializer.Deserialize(fontAtlas.DefaultSerializedPlatformSettings);
 
         Assert.Equal(64, textureSettings.MaxResolution);
-        Assert.Equal(256, fontSettings.MaxResolution);
+        Assert.Equal(512, fontSettings.MaxResolution);
         // The two caps must not drift back together: one shared value is what crushed font atlases to 64.
         Assert.NotEqual(textureSettings.MaxResolution, fontSettings.MaxResolution);
     }

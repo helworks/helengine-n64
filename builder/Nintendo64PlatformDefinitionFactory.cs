@@ -17,9 +17,13 @@ public static class Nintendo64PlatformDefinitionFactory {
     // rather than left as dead weight.
     const string ForcedDisabledFeatures = "debug_overlay;shaders";
 
-    /// <summary>
-    /// Codegen option id selecting <c>std::string</c> as the generated Core's string storage.
-    /// </summary>
+    /// <summary>Stable build-profile id that enables the optional N64 CPU profiler.</summary>
+    public const string CpuProfileBuildProfileId = "cpu-profile";
+
+    /// <summary>Stable codegen-profile id that enables generated Core CPU probes.</summary>
+    public const string CpuProfileCodegenProfileId = "cpu-profile";
+
+    /// <summary>Codegen option id selecting <c>std::string</c> as the generated Core's string storage.</summary>
     public const string UseStdStringSettingId = "codegen-use-std-string";
 
     /// <summary>
@@ -127,6 +131,16 @@ public static class Nintendo64PlatformDefinitionFactory {
                 new(UseRttiSettingId, "Use C++ RTTI", PlatformSettingKind.Boolean, "true", true, [])
             ]);
 
+        PlatformCodegenProfileDefinition cpuProfileCodegen = new(
+            CpuProfileCodegenProfileId,
+            "CPU Profile",
+            "N64 generated runtime with Core CPU probes enabled",
+            PlatformCodegenLanguage.Cpp,
+            PlatformSerializationEndianness.LittleEndian,
+            [
+                .. codegen.Settings,
+                new(PlatformCodegenSettingIds.EnabledFeatures, "Enabled Features", PlatformSettingKind.Text, "runtime_profiler", true, [])
+            ]);
         PlatformMaterialSchemaDefinition materialSchema = new(
             Nintendo64MaterialSchemaIds.StandardSchemaId,
             "N64 Opaque",
@@ -140,7 +154,8 @@ public static class Nintendo64PlatformDefinitionFactory {
 
         PlatformBuildProfileDefinition[] profiles = [
             new("debug", "Debug", "N64 development build", Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, "default", buildSettings),
-            new("release", "Release", "N64 release build", Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, "default", buildSettings)
+            new("release", "Release", "N64 release build", Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, "default", buildSettings),
+            new(CpuProfileBuildProfileId, "CPU Profile", "N64 build with opt-in Core and native CPU profiling", Nintendo64MaterialSchemaIds.StandardGraphicsProfileId, CpuProfileCodegenProfileId, buildSettings)
         ];
 
         PlatformAssetCookCapabilityDefinition[] assetCookCapabilities = [
@@ -177,7 +192,7 @@ public static class Nintendo64PlatformDefinitionFactory {
                 new PlatformComponentSupportRule("helengine.TextComponent", PlatformComponentSupportKind.Transform, "Authored text renders through the shared 2D command list; selection and input are not driven.", string.Empty),
                 new PlatformComponentSupportRule("helengine.FPSComponent", PlatformComponentSupportKind.Transform, "The FPS overlay renders as ordinary authored text.", string.Empty)
             ],
-            [codegen],
+            [codegen, cpuProfileCodegen],
             [new PlatformStorageProfileDefinition("dragonfs-package", "DragonFS Package", PlatformStorageProfileKind.LooseFiles, "n64-dragonfs-package", false)],
             [new PlatformMediaProfileDefinition("n64-cartridge", "N64 Cartridge", PlatformMediaLayoutKind.InstallTree, false, true)],
             new RuntimeGenerationContract(RuntimeMaterialResolutionMode.CookedPlatformOwned, true, PackagedPathPolicy.ContentRelativeOnly),
@@ -198,15 +213,15 @@ public static class Nintendo64PlatformDefinitionFactory {
 
     /// <summary>
     /// Creates the serialized default N64 font atlas cook settings. Font atlases keep a far higher resolution
-    /// cap than ordinary textures: the icons this platform ships are 12 pixels on screen and survive a 64 pixel
-    /// cap, but the editor default atlas is 256x128 and the demo disc body atlas is 256x256, and the same cap
-    /// reduces their glyphs to two or three pixels. A 256x256 atlas costs 128 KB of the console's 4 MB once it
-    /// is packed to RGBA 5551, which is the trade this cap makes deliberately.
+    /// cap than ordinary textures. A body font rasterized at the authored 32 pixel size uses a 512x256 atlas;
+    /// reducing that atlas also reduces glyph metrics and makes text smaller despite an unchanged FontScale.
+    /// The runtime blits individual glyph source rectangles from this surface, so its dimensions are not
+    /// limited by one RDP texture upload. A 512x256 atlas occupies 256 KiB after conversion to RGBA 5551.
     /// </summary>
     /// <returns>Serialized default N64 font atlas settings.</returns>
     static string CreateDefaultSerializedFontAtlasCookSettings() {
         return Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
-            MaxResolution = 256,
+            MaxResolution = 512,
             ColorFormat = TextureAssetColorFormat.Rgba32,
             AlphaPrecision = TextureAssetAlphaPrecision.A8
         });

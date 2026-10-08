@@ -11,6 +11,39 @@ namespace helengine.n64.builder.tests;
 /// </summary>
 public sealed class Nintendo64TextureCookTests {
     /// <summary>
+    /// Keeps every authored 32 pixel glyph texel and the atlas dimensions through the N64 font capability,
+    /// while ensuring the separate generic texture policy still reduces the same source to 64x32.
+    /// </summary>
+    [Fact]
+    public void Cook_PreservesAuthoredBodyAtlasUsingFontCapabilityOnly() {
+        helengine.baseplatform.Definitions.PlatformDefinition definition = Nintendo64PlatformDefinitionFactory.Create();
+        byte[] colors = new byte[512 * 256 * 4];
+        colors[0] = 73;
+        colors[3] = 255;
+        colors[^1] = 219;
+        TextureAsset source = new TextureAsset {
+            Width = 512,
+            Height = 256,
+            Colors = colors,
+            ColorFormat = TextureAssetColorFormat.Rgba32,
+            AlphaPrecision = TextureAssetAlphaPrecision.A8
+        };
+        TextureAssetProcessorSettings fontSettings = Nintendo64TextureCookSettingsSerializer.Deserialize(
+            definition.AssetCookCapabilities.Single(capability => capability.SourceAssetKind == "font-atlas-texture").DefaultSerializedPlatformSettings);
+        TextureAssetProcessorSettings textureSettings = Nintendo64TextureCookSettingsSerializer.Deserialize(
+            definition.AssetCookCapabilities.Single(capability => capability.SourceAssetKind == "texture").DefaultSerializedPlatformSettings);
+
+        TextureAsset fontAtlas = new Nintendo64TextureCooker().Cook(source, fontSettings);
+        TextureAsset ordinaryTexture = new Nintendo64TextureCooker().Cook(source, textureSettings);
+
+        Assert.Equal(512, fontAtlas.Width);
+        Assert.Equal(256, fontAtlas.Height);
+        Assert.Equal(colors, fontAtlas.Colors);
+        Assert.Equal(64, ordinaryTexture.Width);
+        Assert.Equal(32, ordinaryTexture.Height);
+    }
+
+    /// <summary>
     /// Ensures a large source image is downscaled to the configured maximum resolution while preserving alpha.
     /// </summary>
     [Fact]

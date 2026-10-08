@@ -55,7 +55,9 @@ Nintendo64RoundedRectFillGeometry Nintendo64RoundedRectGeometry::Resolve(
     // the stadium the author was asking for when they wrote something larger.
     const float radiusLimit = SmallerOf(destinationWidth, destinationHeight) * 0.5f;
     geometry.Radius = SmallerOf(radius, radiusLimit);
-    geometry.Kind = Nintendo64RoundedRectGeometryKind::Drawable;
+    geometry.Kind = geometry.Radius == 0.0f
+        ? Nintendo64RoundedRectGeometryKind::AxisAlignedRectangle
+        : Nintendo64RoundedRectGeometryKind::Drawable;
     return geometry;
 }
 

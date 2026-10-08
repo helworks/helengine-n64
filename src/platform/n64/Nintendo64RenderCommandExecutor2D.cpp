@@ -98,15 +98,12 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
         if (commandType == ::RenderCommand2DType::TexturedQuad) {
             const int32_t payloadIndex = commandList->GetTexturedQuadPayloadIndex(commandIndex);
             const float rotationRadians = commandList->GetTexturedQuadRotation(payloadIndex);
-            if (std::fabs(rotationRadians) > kOrientationEpsilonRadians) {
-                debugf("n64:error quad-rotation\n");
-                throw new NotSupportedException("N64 2D quads do not support rotation.");
-            }
             BlitQuad(commandList->GetTexturedQuadTexture(payloadIndex),
                      commandList->GetTexturedQuadBounds(payloadIndex),
                      commandList->GetTexturedQuadSourceRect(payloadIndex),
                      commandList->GetTexturedQuadColor(payloadIndex),
-                     false);
+                     false,
+                     rotationRadians);
             continue;
         }
         if (commandType == ::RenderCommand2DType::GlyphQuad) {
@@ -164,7 +161,7 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
 }
 
 void Nintendo64RenderCommandExecutor2D::BlitQuad(::RuntimeTexture* texture, ::float4 bounds, ::float4 sourceRect,
-                                                 ::byte4 color, bool isGlyph) {
+                                                 ::byte4 color, bool isGlyph, float rotationRadians) {
     if (texture == nullptr) {
         if (isGlyph) {
             // A glyph with no atlas is a hard content error: every character on screen would be blank and
@@ -211,8 +208,18 @@ void Nintendo64RenderCommandExecutor2D::BlitQuad(::RuntimeTexture* texture, ::fl
     parms.height = geometry.SourceHeight;
     parms.scale_x = geometry.ScaleX;
     parms.scale_y = geometry.ScaleY;
-    rdpq_tex_blit(concreteTexture->Surface(), static_cast<float>(geometry.DestinationX),
-                  static_cast<float>(geometry.DestinationY), &parms);
+    float destinationX = static_cast<float>(geometry.DestinationX);
+    float destinationY = static_cast<float>(geometry.DestinationY);
+    if (std::fabs(rotationRadians) > kOrientationEpsilonRadians) {
+        const Nintendo64QuadBlitRotation2D rotation =
+            Nintendo64QuadBlitGeometry::ResolveRotation(geometry, rotationRadians);
+        parms.cx = rotation.CenterX;
+        parms.cy = rotation.CenterY;
+        parms.theta = rotation.RotationRadians;
+        destinationX = rotation.AnchorX;
+        destinationY = rotation.AnchorY;
+    }
+    rdpq_tex_blit(concreteTexture->Surface(), destinationX, destinationY, &parms);
 
     ++DrawCallCountValue;
     if (isGlyph) {
@@ -261,6 +268,23 @@ void Nintendo64RenderCommandExecutor2D::FillRoundedRect(::RenderCommandList2D* c
     // same reference-canvas grid still line up once the viewport downscale leaves them on half pixels.
     const float left = static_cast<float>(Nintendo64RoundedRectGeometry::RoundToInt(bounds.X));
     const float top = static_cast<float>(Nintendo64RoundedRectGeometry::RoundToInt(bounds.Y));
+    if (geometry.Kind == Nintendo64RoundedRectGeometryKind::AxisAlignedRectangle) {
+        rdpq_mode_combiner(RDPQ_COMBINER_FLAT);
+        rdpq_set_prim_color(RGBA32(fillColor.X, fillColor.Y, fillColor.Z, fillColor.W));
+        rdpq_fill_rectangle(left, top,
+                            left + geometry.DestinationWidth,
+                            top + geometry.DestinationHeight);
+        rdpq_mode_combiner(RDPQ_COMBINER_TEX_FLAT);
+
+        if (!HasLoggedRoundedRectDraw) {
+            debugf("n64:first-rounded-rect-draw size=%ldx%ld radius=0 verts=0 path=rectangle\n",
+                   static_cast<long>(Nintendo64RoundedRectGeometry::RoundToInt(geometry.DestinationWidth)),
+                   static_cast<long>(Nintendo64RoundedRectGeometry::RoundToInt(geometry.DestinationHeight)));
+            HasLoggedRoundedRectDraw = true;
+        }
+        return;
+    }
+
     ::RoundedRectGeometryBuilder builder;
     ::Array<::float2>* vertices = builder.BuildFillRingVertices(
         kRoundedRectRingSteps,

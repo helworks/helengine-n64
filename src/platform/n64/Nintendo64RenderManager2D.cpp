@@ -106,6 +106,7 @@ void Nintendo64RenderManager2D::Draw() {
     rdpq_sync_pipe();
     rdpq_set_mode_standard();
     rdpq_mode_combiner(RDPQ_COMBINER_TEX_FLAT);
+    rdpq_mode_blender(RDPQ_BLENDER_MULTIPLY);
     rdpq_mode_alphacompare(1);
     rdpq_mode_filter(FILTER_POINT);
 

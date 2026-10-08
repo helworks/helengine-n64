@@ -43,6 +43,15 @@ struct Nintendo64QuadBlitGeometry2D {
     float ScaleY;
 };
 
+/// Center-based placement required by libdragon when a textured quad is rotated.
+struct Nintendo64QuadBlitRotation2D {
+    float AnchorX;
+    float AnchorY;
+    int32_t CenterX;
+    int32_t CenterY;
+    float RotationRadians;
+};
+
 /// Pure arithmetic that turns one command-list quad into blit parameters.  Sprites and glyphs both reach
 /// the RDP through this, because the shared command list has already reduced them to the same shape: a
 /// destination rectangle in pixels and a normalized source rectangle into one texture.
@@ -67,6 +76,10 @@ public:
                                                 float sourceRectWidth, float sourceRectHeight,
                                                 float boundsX, float boundsY,
                                                 float boundsWidth, float boundsHeight);
+
+    /// Resolves the transformed source hotspot while preserving the command's world-space top-left and orientation.
+    static Nintendo64QuadBlitRotation2D ResolveRotation(const Nintendo64QuadBlitGeometry2D& geometry,
+                                                        float rotationRadians);
 
     /// Rounds one coordinate to the nearest integer, halves away from zero.
     /// <param name="value">Value to round.</param>

@@ -82,7 +82,8 @@ public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
             new Nintendo64ContentStager().Stage(request.Manifest.CookedArtifacts, builderCookedRelativePaths, packageSourceRoot, stagingRoot, cancellationToken);
             new Nintendo64StartupManifestWriter().Write(request.GeneratedCoreCppRootPath, request.Manifest);
             progressReporter.Report(new PlatformBuildProgressUpdate("Build Native ROM", "helengine_n64.z64", 0, 1, "Building authored N64 runtime."));
-            NativeBuildExecutor.Build(request.GeneratedCoreCppRootPath, stagingRoot, request.OutputRoot, cancellationToken);
+            bool cpuProfile = string.Equals(request.SelectedCodegenProfileId, Nintendo64PlatformDefinitionFactory.CpuProfileCodegenProfileId, StringComparison.Ordinal);
+            NativeBuildExecutor.Build(request.GeneratedCoreCppRootPath, stagingRoot, request.OutputRoot, request.NativeObjectCacheRoot, cpuProfile, cancellationToken);
             progressReporter.Report(new PlatformBuildProgressUpdate("Build Native ROM", "helengine_n64.z64", 1, 1, "Built authored N64 runtime."));
         } catch (OperationCanceledException) {
             throw;

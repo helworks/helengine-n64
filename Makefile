@@ -5,6 +5,7 @@ SOURCE_DIR := src
 HELENGINE_N64_GENERATED_CORE_ROOT ?= generated/core
 HELENGINE_N64_MODE ?= diagnostic
 HELENGINE_N64_FILESYSTEM_ROOT ?= filesystem
+N64_CPU_PROFILE ?= 0
 
 ifeq ($(HELENGINE_N64_MODE),authored)
 # n64.mk evaluates N64_MKDFS_ROOT when its %.dfs recipe runs.  Keep the
@@ -28,6 +29,7 @@ include $(N64_INST)/include/t3d.mk
 # with via its own -I. .  Without it the native build cannot resolve those two headers at all, even
 # though the host test script always could.
 N64_CXXFLAGS += -Isrc -I.
+N64_CXXFLAGS += -DHELENGINE_N64_CPU_PROFILE=$(N64_CPU_PROFILE)
 
 OBJECTS := \
 	$(BUILD_DIR)/main.o \
@@ -43,6 +45,9 @@ endif
 
 ifeq ($(HELENGINE_N64_MODE),authored)
 N64_CXXFLAGS += -DHELENGINE_N64_AUTHORED=1
+ifeq ($(N64_CPU_PROFILE),1)
+OBJECTS += $(BUILD_DIR)/platform/n64/Nintendo64CpuProfileWindow.o $(BUILD_DIR)/platform/n64/Nintendo64CpuProfileTypeName.o $(BUILD_DIR)/platform/n64/Nintendo64CpuProfileSink.o
+endif
 ifneq ($(wildcard $(HELENGINE_N64_GENERATED_CORE_ROOT)/Core.hpp),)
 ifneq ($(wildcard $(HELENGINE_N64_GENERATED_CORE_ROOT)/helengine_core_unity.cpp),)
 N64_CXXFLAGS += -DHELENGINE_N64_HAS_GENERATED_CORE=1
@@ -87,6 +92,8 @@ endif
 else
 $(error HELENGINE_N64_MODE=authored requires a generated Core.hpp tree; refusing diagnostic fallback)
 endif
+else ifeq ($(N64_CPU_PROFILE),1)
+$(error N64_CPU_PROFILE=1 requires HELENGINE_N64_MODE=authored)
 else ifneq ($(HELENGINE_N64_MODE),diagnostic)
 $(error HELENGINE_N64_MODE must be diagnostic or authored)
 endif
@@ -113,7 +120,9 @@ $(BUILD_DIR)/generated-core/%.o: $(HELENGINE_N64_GENERATED_CORE_ROOT)/%.cpp
 .PHONY: all clean
 
 clean:
-	rm -rf build helengine_n64.z64
+	mkdir -p "$(BUILD_DIR)"
+	find "$(BUILD_DIR)" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+	rm -f helengine_n64.z64
 
 
 

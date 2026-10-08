@@ -45,7 +45,7 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
             workingRoot,
             "release",
             "n64-standard",
-            "release",
+            "default",
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),
@@ -62,6 +62,7 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
             CancellationToken.None);
 
         Assert.True(report.Succeeded, string.Join(Environment.NewLine, report.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        Assert.False(nativeBuildExecutor.CpuProfile);
         Assert.NotNull(nativeBuildExecutor.StagedFilesystemRootPath);
         Assert.Equal("scene", File.ReadAllText(Path.Combine(nativeBuildExecutor.StagedFilesystemRootPath!, "cooked", "scenes", "cube_test.hasset")));
     }
@@ -110,6 +111,7 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
             CancellationToken.None);
 
         Assert.True(report.Succeeded, string.Join(Environment.NewLine, report.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        Assert.False(nativeBuildExecutor.CpuProfile);
         string stagedIconPath = Path.Combine(nativeBuildExecutor.StagedFilesystemRootPath!, "cooked", "imported", "icon");
         Assert.True(File.Exists(stagedIconPath), $"The cooked texture never reached the staging tree at '{stagedIconPath}'.");
         helengine.TextureAsset stagedIcon = Assert.IsType<helengine.TextureAsset>(
@@ -168,7 +170,9 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
         PlatformCookWorkItem[] platformCookWorkItems,
         string outputRoot,
         string workingRoot,
-        string generatedCoreRoot) {
+        string generatedCoreRoot,
+        string selectedBuildProfileId = "release",
+        string selectedCodegenProfileId = "default") {
         PlatformBuildManifest manifest = new(
             1,
             "project",
@@ -191,9 +195,9 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
             [new PlatformCookProfile("release", "release", new PlatformCookProfileCapabilities("n64", "n64-standard", "pcm-buffered", "n64-scene-v1", PlatformSerializationEndianness.LittleEndian))],
             outputRoot,
             workingRoot,
-            "release",
+            selectedBuildProfileId,
             "n64-standard",
-            "release",
+            selectedCodegenProfileId,
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),
@@ -201,6 +205,26 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
             "release",
             "dragonfs",
             "release");
+    }
+
+    [Fact]
+    public async Task BuildAsync_EnablesNativeCpuProfileForCpuProfileBuild() {
+        string root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-n64\\v02\\tests", Guid.NewGuid().ToString("N"));
+        string workingRoot = Path.Combine(root, "builder");
+        string packageSourceRoot = Path.Combine(workingRoot, "package-source");
+        string cookedScenePath = Path.Combine(packageSourceRoot, "cooked", "scenes", "cube_test.hasset");
+        Directory.CreateDirectory(Path.GetDirectoryName(cookedScenePath)!);
+        File.WriteAllText(cookedScenePath, "scene");
+        RecordingNativeBuildExecutor nativeBuildExecutor = new();
+        PlatformBuildRequest request = CreateRequest(
+            [new PlatformBuildArtifact("cooked/scenes/cube_test.hasset", "cube_test", "sha", "scene", "n64")],
+            [], Path.Combine(root, "output"), workingRoot, Path.Combine(root, "generated-core"), "cpu-profile", "cpu-profile");
+
+        PlatformBuildReport report = await new Nintendo64PlatformAssetBuilder(nativeBuildExecutor).BuildAsync(
+            request, new NoOpProgressReporter(), new NoOpDiagnosticReporter(), CancellationToken.None);
+
+        Assert.True(report.Succeeded, string.Join(Environment.NewLine, report.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        Assert.True(nativeBuildExecutor.CpuProfile);
     }
 
     /// <summary>
@@ -221,8 +245,10 @@ public sealed class Nintendo64PlatformAssetBuilderTests {
 
     sealed class RecordingNativeBuildExecutor : INintendo64NativeBuildExecutor {
         public string StagedFilesystemRootPath { get; private set; } = string.Empty;
+        public bool CpuProfile { get; private set; }
 
-        public void Build(string generatedCoreCppRootPath, string stagedFilesystemRootPath, string outputRootPath, CancellationToken cancellationToken) {
+        public void Build(string generatedCoreCppRootPath, string stagedFilesystemRootPath, string outputRootPath, string nativeObjectCacheRootPath, bool cpuProfile, CancellationToken cancellationToken) {
+            CpuProfile = cpuProfile;
             StagedFilesystemRootPath = stagedFilesystemRootPath;
             Assert.True(File.Exists(Path.Combine(stagedFilesystemRootPath, "cooked", "scenes", "cube_test.hasset")));
             Directory.CreateDirectory(outputRootPath);

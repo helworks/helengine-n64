@@ -1036,3 +1036,27 @@ passes, and the final ROM reports a real render duration (`0.5 ms`) in the FPS
 row. Eight additional sequential 30-second Gopher64 runs all reached
 `first-frame-complete` without an RSP crash, timeout, or `n64:error`; the
 intermittent RSP hang therefore remains un-reproduced and unresolved.
+
+On 2026-09-24, a further 20 sequential 30-second Release runs all reached
+`first-frame-complete` and showed no RSP crash, timeout, or `n64:error`. One run
+emitted 2,942 Gopher64 linked-device memory-budget warnings without an RSP
+error, so emulator memory pressure remains a plausible alternative cause. This
+brings the post-original-hang non-reproduction count to 48 runs; the hang is
+still unresolved, not fixed.
+
+The opt-in N64 CPU Profile build was verified in Gopher64 across 288 complete
+60-frame reports and 2,592 component rows. Every report had no drops, resets, or
+clock faults, and all seven component types had concrete RTTI names. The report
+attributes roughly 14 ms per frame to the 2D pass and 1 ms to
+`rdpq_detach_wait`. No RSP marker appeared. Gopher64 stderr contained 29,081
+`Exhausted LinkedDeviceHost memory` and 29,401 over-budget warnings. No screenshot
+was captured; user visual confirmation of the latest authored-text build remains
+pending at the time of the logged emulator run. The user later confirmed that
+the scene label is visible, Light is fully on-screen, the cube keeps rotating,
+and the FPS readout appears to show `0.5 ms`, matching the validated log.
+
+The final build-workspace review also exercised `make clean` with an external
+native-object cache mounted into Docker. The former target tried to remove the
+mount point and failed with `Device or resource busy`; it now removes the
+mounted directory's contents. The regression is covered in the Docker-backed
+host test suite.

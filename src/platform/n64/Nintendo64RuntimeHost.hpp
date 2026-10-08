@@ -20,6 +20,9 @@ class Nintendo64ContentStreamSource;
 class Nintendo64RenderManager3D;
 class Nintendo64RenderManager2D;
 class Nintendo64InputBackend;
+#if HELENGINE_N64_CPU_PROFILE
+class Nintendo64CpuProfileSink;
+#endif
 
 /// Hosts generated Core and keeps the existing boot host available for diagnostic mode.
 class Nintendo64RuntimeHost {
@@ -37,6 +40,9 @@ private:
     Nintendo64RenderManager3D* Render3D = nullptr;
     Nintendo64RenderManager2D* Render2D = nullptr;
     Nintendo64InputBackend* Input = nullptr;
+#if HELENGINE_N64_CPU_PROFILE
+    Nintendo64CpuProfileSink* CpuProfile = nullptr;
+#endif
 
     bool Initialize();
     void Shutdown();

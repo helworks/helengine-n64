@@ -80,8 +80,19 @@ void TestRadiusClampsToHalfTheSmallerSide() {
     // A negative authored radius has no geometric meaning and resolves to a square corner.
     const Nintendo64RoundedRectFillGeometry negative =
         Nintendo64RoundedRectGeometry::Resolve(32, 32, -6.0f, 1.0f, 1.0f);
-    Check(negative.Kind == Nintendo64RoundedRectGeometryKind::Drawable, "a negative radius is still drawable");
+    Check(negative.Kind == Nintendo64RoundedRectGeometryKind::AxisAlignedRectangle,
+          "a negative radius is drawable as a square rectangle");
     Check(NearlyEqual(negative.Radius, 0.0f), "a negative authored radius resolves to a square corner");
+}
+
+/// A zero-radius shape needs no triangle fan; the N64 can submit it as one direct rectangle primitive.
+void TestZeroRadiusSelectsTheDirectRectanglePath() {
+    const Nintendo64RoundedRectFillGeometry geometry =
+        Nintendo64RoundedRectGeometry::Resolve(320, 1, 0.0f, 1.0f, 1.0f);
+
+    Check(geometry.Kind == Nintendo64RoundedRectGeometryKind::AxisAlignedRectangle,
+          "a zero-radius scanline selects the direct rectangle path");
+    Check(NearlyEqual(geometry.Radius, 0.0f), "the direct rectangle path has no corner radius");
 }
 
 /// The cube_test swatch resolves to a radius well under one pixel, and that is a real shape, not an error.
@@ -141,6 +152,7 @@ int main() {
     TestParentScaleAppliesToBothAxesAndTheRadius();
     TestRadiusClampsToHalfTheSmallerSide();
     TestSubPixelRadiusStaysDrawable();
+    TestZeroRadiusSelectsTheDirectRectanglePath();
     TestNonPositiveSizeReportsEmptyDestination();
     TestRoundToIntRoundsHalvesAway();
     if (failures != 0) {
