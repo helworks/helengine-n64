@@ -29,7 +29,7 @@ public sealed class Nintendo64PlatformCookWorkItemExecutor {
     /// cook are the ones the work item's owning capability already resolved: the work item's own
     /// <see cref="PlatformCookWorkItem.SerializedPlatformSettings"/> carries whichever capability (texture or
     /// font-atlas-texture) matched its <see cref="PlatformCookWorkItem.SourceAssetKind"/>. This method only
-    /// selects which capability's source kind is allowed; the cooker and serializer are unchanged.
+    /// selects the accepted source kind and disposes its own decoded and cooked assets after serialization.
     /// </summary>
     /// <param name="workItem">Work item describing the source asset, settings, and cooked output path.</param>
     /// <param name="packageSourceRootPath">Package source root that the DragonFS stager reads.</param>
@@ -45,7 +45,8 @@ public sealed class Nintendo64PlatformCookWorkItemExecutor {
         }
 
         TextureAssetProcessorSettings settings = Nintendo64TextureCookSettingsSerializer.Deserialize(workItem.SerializedPlatformSettings);
-        TextureAsset cookedTexture = TextureCooker.Cook(SourceTextureDecoder.Decode(workItem.SourceAssetPath), settings);
+        using TextureAsset sourceTexture = SourceTextureDecoder.Decode(workItem.SourceAssetPath);
+        using TextureAsset cookedTexture = TextureCooker.Cook(sourceTexture, settings);
         cookedTexture.Id = workItem.OutputLogicalArtifactId;
 
         string destinationPath = Path.Combine(

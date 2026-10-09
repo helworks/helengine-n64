@@ -1,4 +1,5 @@
 using System.Drawing;
+using helengine.editor;
 
 namespace helengine.n64.builder;
 
@@ -83,34 +84,41 @@ public sealed class Nintendo64SourceTextureDecoder {
     }
 
     /// <summary>
-    /// Reads one serialized engine texture asset, which the editor already stored as straight RGBA pixel bytes.
+    /// Normalizes serialized generic textures, including already-indexed editor font atlases, into independent RGBA pixels.
+    /// The deserialized pixel and palette buffers are disposed after decoding; the returned copy retains asset identity.
     /// </summary>
     /// <param name="sourceAssetPath">Absolute engine texture asset path.</param>
     /// <returns>Raw texture asset containing straight RGBA pixel bytes.</returns>
     TextureAsset DecodeEngineTextureAsset(string sourceAssetPath) {
         Asset deserializedAsset = helengine.files.AssetSerializer.DeserializeFromBytes(File.ReadAllBytes(sourceAssetPath));
         if (deserializedAsset is not TextureAsset sourceTexture) {
+            if (deserializedAsset is IDisposable disposableAsset) {
+                disposableAsset.Dispose();
+            }
             throw new InvalidOperationException($"N64 texture cook source '{sourceAssetPath}' did not contain a texture asset.");
         }
-        if (sourceTexture.ColorFormat != TextureAssetColorFormat.Rgba32) {
-            throw new InvalidOperationException($"N64 texture cook source '{sourceAssetPath}' must be Rgba32; received '{sourceTexture.ColorFormat}'.");
-        }
-        if (sourceTexture.Width < 1 || sourceTexture.Height < 1) {
-            throw new InvalidOperationException("Source textures must have positive dimensions.");
-        }
+        using (sourceTexture) {
+            if (!TextureAssetProcessorSettings.TryResolveGenericColorFormat(sourceTexture.ColorFormat.ToString(), out _)) {
+                throw new InvalidOperationException($"N64 texture cook source '{sourceAssetPath}' uses an unsupported generic format '{sourceTexture.ColorFormat}'.");
+            }
+            if (sourceTexture.Width < 1 || sourceTexture.Height < 1) {
+                throw new InvalidOperationException("Source textures must have positive dimensions.");
+            }
 
-        int expectedByteLength = sourceTexture.Width * sourceTexture.Height * 4;
-        if (sourceTexture.Colors == null || sourceTexture.Colors.Length != expectedByteLength) {
-            throw new InvalidOperationException($"N64 texture cook source '{sourceAssetPath}' pixel bytes must match Width * Height * 4.");
+            byte[] rgbaColors = TextureAssetPixelCodec.DecodeToRgba32(sourceTexture);
+            return new TextureAsset {
+                Id = sourceTexture.Id,
+                RuntimeAssetId = sourceTexture.RuntimeAssetId,
+                AuthoringAssetId = sourceTexture.AuthoringAssetId,
+                FormerAuthoringAssetIds = sourceTexture.FormerAuthoringAssetIds == null ? null : (string[])sourceTexture.FormerAuthoringAssetIds.Clone(),
+                IsEngineOwned = sourceTexture.IsEngineOwned,
+                Width = sourceTexture.Width,
+                Height = sourceTexture.Height,
+                Colors = rgbaColors,
+                PaletteColors = Array.Empty<byte>(),
+                ColorFormat = TextureAssetColorFormat.Rgba32,
+                AlphaPrecision = TextureAssetAlphaPrecision.A8
+            };
         }
-
-        return new TextureAsset {
-            Width = sourceTexture.Width,
-            Height = sourceTexture.Height,
-            Colors = sourceTexture.Colors,
-            PaletteColors = Array.Empty<byte>(),
-            ColorFormat = TextureAssetColorFormat.Rgba32,
-            AlphaPrecision = sourceTexture.AlphaPrecision
-        };
     }
 }

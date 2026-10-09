@@ -8,6 +8,8 @@
 
 namespace helengine::n64 {
 
+class Nintendo64TextureBindingCache;
+
 /// Executes one flattened 2D command list against the RDP.  The shared `RenderCommandListBuilder2D` has
 /// already resolved every drawable into clip pushes, textured quads, glyph quads and rounded rectangles in
 /// frame-buffer pixels, so this class contains no layout logic at all: it reads commands, resolves their
@@ -32,7 +34,7 @@ private:
     /// <param name="color">Primitive colour the flat combiner modulates the texel with.</param>
     /// <param name="isGlyph">True when the quad came from a glyph command, which changes only tracing.</param>
     void BlitQuad(::RuntimeTexture* texture, ::float4 bounds, ::float4 sourceRect, ::byte4 color, bool isGlyph,
-                  float rotationRadians = 0.0f);
+                  Nintendo64TextureBindingCache& bindings, float rotationRadians = 0.0f);
 
     /// Fills one rounded rectangle as a flat-coloured triangle fan and restores the textured combiner.
     /// <param name="commandList">List the command was read from.</param>

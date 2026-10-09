@@ -194,6 +194,8 @@ int Nintendo64RuntimeHost::Run() {
     uint8_t loggedTitleMetrics = 0;
     // Initial viewport scaling can complete after the menu update; sample headings after three completed frames.
     uint8_t completedDiagnosticFrames = 0;
+    // Trace the existing Core clock only during the first eight updates, without a per-frame log stream.
+    uint8_t loggedFrameDeltas = 0;
     std::string lastMenuPanel;
     std::string lastMenuSelection;
 #if HELENGINE_N64_CPU_PROFILE
@@ -211,7 +213,11 @@ int Nintendo64RuntimeHost::Run() {
         CpuProfile->BeginFrame(frameSequence);
         const std::uint64_t updateStart = CpuProfile->ReadMicroseconds();
 #endif
-        EngineCore->Update(1.0 / 60.0);
+        EngineCore->Update();
+        if (loggedFrameDeltas < 8) {
+            debugf("n64:frame-delta seconds=%.9f\n", EngineCore->get_FrameDeltaSeconds());
+            ++loggedFrameDeltas;
+        }
         // State changes are useful on hardware's ISViewer/USB log too: emit once
         // per menu transition, rather than printing continuously in the frame loop.
         auto* entities = EngineCore->get_ObjectManager()->get_Entities();

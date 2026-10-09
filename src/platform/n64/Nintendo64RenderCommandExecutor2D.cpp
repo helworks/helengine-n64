@@ -20,6 +20,7 @@
 #include "platform/n64/Nintendo64QuadBlitGeometry.hpp"
 #include "platform/n64/Nintendo64RoundedRectGeometry.hpp"
 #include "platform/n64/Nintendo64RuntimeTexture.hpp"
+#include "platform/n64/Nintendo64TextureBindingCache.hpp"
 
 namespace helengine::n64 {
 namespace {
@@ -61,6 +62,8 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
         throw new InvalidOperationException("N64 2D executor requires a positive frame size.");
     }
     Nintendo64ClipRectStack clipStack(frameWidth, frameHeight);
+    // No cached texture pointer survives this Execute call or any intervening camera/frame/3D pass.
+    Nintendo64TextureBindingCache bindings;
 
     const int32_t commandCount = commandList->get_Count();
     for (int32_t commandIndex = 0; commandIndex < commandCount; ++commandIndex) {
@@ -103,6 +106,7 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
                      commandList->GetTexturedQuadSourceRect(payloadIndex),
                      commandList->GetTexturedQuadColor(payloadIndex),
                      false,
+                     bindings,
                      rotationRadians);
             continue;
         }
@@ -112,7 +116,7 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
                      commandList->GetGlyphQuadBounds(payloadIndex),
                      commandList->GetGlyphQuadSourceRect(payloadIndex),
                      commandList->GetGlyphQuadColor(payloadIndex),
-                     true);
+                     true, bindings);
             continue;
         }
         if (commandType == ::RenderCommand2DType::RoundedRect) {
@@ -161,7 +165,8 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
 }
 
 void Nintendo64RenderCommandExecutor2D::BlitQuad(::RuntimeTexture* texture, ::float4 bounds, ::float4 sourceRect,
-                                                 ::byte4 color, bool isGlyph, float rotationRadians) {
+                                                 ::byte4 color, bool isGlyph, Nintendo64TextureBindingCache& bindings,
+                                                 float rotationRadians) {
     if (texture == nullptr) {
         if (isGlyph) {
             // A glyph with no atlas is a hard content error: every character on screen would be blank and
@@ -219,6 +224,8 @@ void Nintendo64RenderCommandExecutor2D::BlitQuad(::RuntimeTexture* texture, ::fl
         destinationX = rotation.AnchorX;
         destinationY = rotation.AnchorY;
     }
+    // CI chunks preserve upper TMEM. Reload only after another indexed palette or a direct RGBA blit.
+    bindings.Bind(concreteTexture);
     rdpq_tex_blit(concreteTexture->Surface(), destinationX, destinationY, &parms);
 
     ++DrawCallCountValue;

@@ -215,29 +215,38 @@ public static class Nintendo64PlatformDefinitionFactory {
     /// Creates the serialized default N64 font atlas cook settings. Font atlases keep a far higher resolution
     /// cap than ordinary textures. A body font rasterized at the authored 32 pixel size uses a 512x256 atlas;
     /// reducing that atlas also reduces glyph metrics and makes text smaller despite an unchanged FontScale.
-    /// The runtime blits individual glyph source rectangles from this surface, so its dimensions are not
-    /// limited by one RDP texture upload. A 512x256 atlas occupies 256 KiB after conversion to RGBA 5551.
+    /// Indexed8 retains all 256 coverage levels in its RGBA palette; the runtime chooses IA16 for grayscale
+    /// glyph palettes. The 512x256 index surface uses 128 KiB without changing any glyph source rectangle.
     /// </summary>
     /// <returns>Serialized default N64 font atlas settings.</returns>
     static string CreateDefaultSerializedFontAtlasCookSettings() {
         return Nintendo64TextureCookSettingsSerializer.Serialize(new TextureAssetProcessorSettings {
             MaxResolution = 512,
-            ColorFormat = TextureAssetColorFormat.Rgba32,
-            AlphaPrecision = TextureAssetAlphaPrecision.A8
+            ColorFormat = TextureAssetColorFormat.Indexed8,
+            AlphaPrecision = TextureAssetAlphaPrecision.A8,
+            IndexingMethodId = TextureAssetIndexingMethod.QuantizedIndexed.ToString()
         });
     }
 
     /// <summary>
-    /// Creates the N64 texture format capability set: one straight RGBA source format with opaque or eight-bit alpha.
+    /// Publishes the direct RGBA and palette-backed storage formats supported by the N64 runtime.
     /// </summary>
     /// <returns>N64 texture format capabilities.</returns>
     static PlatformTextureFormatCapabilityDefinition CreateTextureFormatCapabilities() {
         return new PlatformTextureFormatCapabilityDefinition(
-            [TextureAssetColorFormat.Rgba32.ToString()],
-            [TextureAssetAlphaPrecision.Opaque, TextureAssetAlphaPrecision.A8],
+            [TextureAssetColorFormat.Rgba32.ToString(), TextureAssetColorFormat.Indexed4.ToString(), TextureAssetColorFormat.Indexed8.ToString()],
+            [TextureAssetAlphaPrecision.Opaque, TextureAssetAlphaPrecision.Binary, TextureAssetAlphaPrecision.A4, TextureAssetAlphaPrecision.A8],
             [
                 new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Rgba32.ToString(), TextureAssetAlphaPrecision.Opaque),
-                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Rgba32.ToString(), TextureAssetAlphaPrecision.A8)
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Rgba32.ToString(), TextureAssetAlphaPrecision.A8),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Indexed4.ToString(), TextureAssetAlphaPrecision.Opaque),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Indexed4.ToString(), TextureAssetAlphaPrecision.Binary),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Indexed4.ToString(), TextureAssetAlphaPrecision.A4),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Indexed4.ToString(), TextureAssetAlphaPrecision.A8),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Indexed8.ToString(), TextureAssetAlphaPrecision.Opaque),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Indexed8.ToString(), TextureAssetAlphaPrecision.Binary),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Indexed8.ToString(), TextureAssetAlphaPrecision.A4),
+                new PlatformTextureFormatCombinationDefinition(TextureAssetColorFormat.Indexed8.ToString(), TextureAssetAlphaPrecision.A8)
             ]);
     }
 }

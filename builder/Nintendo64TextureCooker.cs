@@ -3,7 +3,7 @@ using helengine.editor;
 namespace helengine.n64.builder;
 
 /// <summary>
-/// Downscales decoded straight-RGBA texture assets into the cooked N64 runtime form using a box filter.
+/// Box-filters straight-RGBA sources before producing direct RGBA or generic palette-backed N64 textures.
 /// </summary>
 public sealed class Nintendo64TextureCooker {
     /// <summary>
@@ -12,7 +12,7 @@ public sealed class Nintendo64TextureCooker {
     /// </summary>
     /// <param name="sourceTexture">Decoded straight-RGBA texture asset to cook.</param>
     /// <param name="settings">Resolved N64 texture cook settings.</param>
-    /// <returns>Cooked texture asset sized to the configured maximum resolution.</returns>
+    /// <returns>Independent cooked texture with preserved identity, requested storage and the configured size cap.</returns>
     public TextureAsset Cook(TextureAsset sourceTexture, TextureAssetProcessorSettings settings) {
         if (sourceTexture == null) {
             throw new ArgumentNullException(nameof(sourceTexture));
@@ -23,10 +23,9 @@ public sealed class Nintendo64TextureCooker {
         if (sourceTexture.ColorFormat != TextureAssetColorFormat.Rgba32) {
             throw new InvalidOperationException($"N64 texture cook requires an Rgba32 source texture; received '{sourceTexture.ColorFormat}'.");
         }
-        // The cook only ever emits Rgba32, so a settings payload asking for anything else was silently getting
-        // Rgba32 back. Reject it loudly instead of pretending the request was honoured.
-        if (settings.ColorFormat != TextureAssetColorFormat.Rgba32) {
-            throw new InvalidOperationException($"N64 texture cook only emits Rgba32; the requested cook settings color format '{settings.ColorFormat}' is not supported.");
+        Nintendo64TextureCookSettingsSerializer.Validate(settings);
+        if (sourceTexture.Width < 1 || sourceTexture.Height < 1) {
+            throw new InvalidOperationException("N64 source textures must have positive dimensions.");
         }
         // Width and Height are 16-bit, so the product of the two and four bytes per pixel leaves the 32-bit
         // range above roughly 23170 pixels per side and would wrap into a bogus expected length. Widen the
@@ -53,7 +52,12 @@ public sealed class Nintendo64TextureCooker {
             ForceOpaqueAlpha(cookedColors);
         }
 
-        return new TextureAsset {
+        TextureAsset resizedTexture = new TextureAsset {
+            Id = sourceTexture.Id,
+            RuntimeAssetId = sourceTexture.RuntimeAssetId,
+            AuthoringAssetId = sourceTexture.AuthoringAssetId,
+            FormerAuthoringAssetIds = sourceTexture.FormerAuthoringAssetIds == null ? null : (string[])sourceTexture.FormerAuthoringAssetIds.Clone(),
+            IsEngineOwned = sourceTexture.IsEngineOwned,
             Width = checked((ushort)targetWidth),
             Height = checked((ushort)targetHeight),
             Colors = cookedColors,
@@ -61,6 +65,24 @@ public sealed class Nintendo64TextureCooker {
             ColorFormat = TextureAssetColorFormat.Rgba32,
             AlphaPrecision = settings.AlphaPrecision
         };
+        if (settings.ColorFormat == TextureAssetColorFormat.Rgba32) {
+            return resizedTexture;
+        }
+
+        // Quantization follows the existing box filter, so changing storage format cannot change resize sampling.
+        resizedTexture.AlphaPrecision = TextureAssetAlphaPrecision.A8;
+        using (resizedTexture) {
+            TextureAsset indexedTexture = new TextureAssetProcessor().Apply(resizedTexture, new TextureAssetProcessorSettings {
+                MaxResolution = 0,
+                ColorFormat = settings.ColorFormat,
+                AlphaPrecision = settings.AlphaPrecision,
+                IndexingMethodId = settings.IndexingMethodId
+            });
+            indexedTexture.AuthoringAssetId = resizedTexture.AuthoringAssetId;
+            indexedTexture.FormerAuthoringAssetIds = resizedTexture.FormerAuthoringAssetIds == null ? null : (string[])resizedTexture.FormerAuthoringAssetIds.Clone();
+            indexedTexture.IsEngineOwned = resizedTexture.IsEngineOwned;
+            return indexedTexture;
+        }
     }
 
     /// <summary>

@@ -13,15 +13,16 @@ public static class Nintendo64TextureCookSettingsSerializer {
     /// <param name="settings">Settings payload to serialize.</param>
     /// <returns>Serialized N64 texture settings string.</returns>
     public static string Serialize(TextureAssetProcessorSettings settings) {
-        if (settings == null) {
-            throw new ArgumentNullException(nameof(settings));
-        }
-
-        return JsonSerializer.Serialize(new Dictionary<string, object> {
+        Validate(settings);
+        Dictionary<string, object> properties = new() {
             ["maxResolution"] = settings.MaxResolution,
             ["colorFormat"] = settings.ColorFormat.ToString(),
             ["alphaPrecision"] = settings.AlphaPrecision.ToString()
-        });
+        };
+        if (!string.IsNullOrEmpty(settings.IndexingMethodId)) {
+            properties.Add("indexingMethod", settings.IndexingMethodId);
+        }
+        return JsonSerializer.Serialize(properties);
     }
 
     /// <summary>
@@ -39,6 +40,15 @@ public static class Nintendo64TextureCookSettingsSerializer {
 
         using JsonDocument document = JsonDocument.Parse(serializedSettings);
         JsonElement root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object) {
+            throw new InvalidOperationException("N64 texture settings must be a JSON object.");
+        }
+        HashSet<string> propertyNames = new(StringComparer.Ordinal);
+        foreach (JsonProperty property in root.EnumerateObject()) {
+            if (!propertyNames.Add(property.Name)) {
+                throw new InvalidOperationException($"Duplicate N64 texture setting '{property.Name}'.");
+            }
+        }
         if (!root.TryGetProperty("maxResolution", out JsonElement maxResolutionElement)) {
             throw new InvalidOperationException("Malformed N64 texture cook settings payload: 'maxResolution' is required.");
         }
@@ -53,20 +63,54 @@ public static class Nintendo64TextureCookSettingsSerializer {
         string colorFormatName = colorFormatElement.GetString();
         string alphaPrecisionName = alphaPrecisionElement.GetString();
 
-        if (!Enum.TryParse(colorFormatName, true, out TextureAssetColorFormat colorFormat)) {
+        if (!Enum.TryParse(colorFormatName, true, out TextureAssetColorFormat colorFormat)
+            || !string.Equals(colorFormatName, colorFormat.ToString(), StringComparison.OrdinalIgnoreCase)) {
             throw new InvalidOperationException($"Unsupported N64 texture color format '{colorFormatName}'.");
         }
-        if (colorFormat != TextureAssetColorFormat.Rgba32) {
-            throw new InvalidOperationException($"N64 textures must cook to Rgba32; received '{colorFormatName}'.");
-        }
-        if (!Enum.TryParse(alphaPrecisionName, true, out TextureAssetAlphaPrecision alphaPrecision)) {
+        if (!Enum.TryParse(alphaPrecisionName, true, out TextureAssetAlphaPrecision alphaPrecision)
+            || !string.Equals(alphaPrecisionName, alphaPrecision.ToString(), StringComparison.OrdinalIgnoreCase)) {
             throw new InvalidOperationException($"Unsupported N64 texture alpha precision '{alphaPrecisionName}'.");
         }
 
-        return new TextureAssetProcessorSettings {
+        TextureAssetProcessorSettings settings = new() {
             MaxResolution = maxResolution,
             ColorFormat = colorFormat,
-            AlphaPrecision = alphaPrecision
+            AlphaPrecision = alphaPrecision,
+            IndexingMethodId = root.TryGetProperty("indexingMethod", out JsonElement indexingMethodElement)
+                ? indexingMethodElement.GetString()
+                : string.Empty
         };
+        Validate(settings);
+        return settings;
+    }
+
+    /// <summary>
+    /// Rejects unsupported formats, alpha policies and indexing methods before any source or output is mutated.
+    /// Empty indexed methods retain the shared processor's QuantizedIndexed compatibility default.
+    /// </summary>
+    /// <param name="settings">Authored settings whose complete combination must be supported.</param>
+    public static void Validate(TextureAssetProcessorSettings settings) {
+        if (settings == null) {
+            throw new ArgumentNullException(nameof(settings));
+        }
+        if (settings.MaxResolution <= 0) {
+            throw new InvalidOperationException("N64 textures require a positive maximum resolution.");
+        }
+        if (!TextureAssetProcessorSettings.TryResolveGenericColorFormat(settings.ColorFormatId, out TextureAssetColorFormat format)
+            || (format != TextureAssetColorFormat.Rgba32 && format != TextureAssetColorFormat.Indexed4 && format != TextureAssetColorFormat.Indexed8)) {
+            throw new InvalidOperationException($"Unsupported N64 texture color format '{settings.ColorFormatId}'.");
+        }
+        TextureAssetAlphaPrecision alpha = settings.AlphaPrecision;
+        if (alpha != TextureAssetAlphaPrecision.Opaque && alpha != TextureAssetAlphaPrecision.A8
+            && (format == TextureAssetColorFormat.Rgba32 || (alpha != TextureAssetAlphaPrecision.Binary && alpha != TextureAssetAlphaPrecision.A4))) {
+            throw new InvalidOperationException($"Unsupported N64 texture alpha precision '{alpha}' for '{format}'.");
+        }
+        if (format == TextureAssetColorFormat.Rgba32) {
+            if (!string.IsNullOrEmpty(settings.IndexingMethodId)) {
+                throw new InvalidOperationException("An indexing method requires an indexed N64 texture format.");
+            }
+        } else {
+            settings.ResolveIndexingMethod();
+        }
     }
 }

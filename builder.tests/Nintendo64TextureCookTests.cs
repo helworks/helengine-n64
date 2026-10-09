@@ -38,7 +38,8 @@ public sealed class Nintendo64TextureCookTests {
 
         Assert.Equal(512, fontAtlas.Width);
         Assert.Equal(256, fontAtlas.Height);
-        Assert.Equal(colors, fontAtlas.Colors);
+        Assert.Equal(TextureAssetColorFormat.Indexed8, fontAtlas.ColorFormat);
+        Assert.Equal(colors, TextureAssetPixelCodec.DecodeToRgba32(fontAtlas));
         Assert.Equal(64, ordinaryTexture.Width);
         Assert.Equal(32, ordinaryTexture.Height);
     }

@@ -54,9 +54,12 @@ Nintendo64RenderManager2D::~Nintendo64RenderManager2D() {
     Nintendo64RuntimeTexture* texture = new Nintendo64RuntimeTexture();
     if (!texture->Initialize(data)) {
         delete texture;
-        throw new InvalidOperationException("N64 textures require a straight RGBA cooked payload.");
+        throw new InvalidOperationException("N64 textures require a valid RGBA32, Indexed4 or Indexed8 cooked payload.");
     }
-    debugf("n64:texture-loaded id=%s size=%ldx%ld\n", data->get_Id().c_str(), static_cast<long>(texture->get_Width()), static_cast<long>(texture->get_Height()));
+    debugf("n64:texture-loaded id=%s size=%ldx%ld format=%s texel-bytes=%lu palette-bytes=%lu\n",
+        data->get_Id().c_str(), static_cast<long>(texture->get_Width()), static_cast<long>(texture->get_Height()),
+        tex_format_name(surface_get_format(texture->Surface())), static_cast<unsigned long>(texture->TexelBytes()),
+        static_cast<unsigned long>(texture->PaletteBytes()));
     return texture;
 }
 
