@@ -203,6 +203,58 @@ void TestOddSourceHotspotPreservesTopLeft() {
     Check(std::fabs(rotation.AnchorY - 50.0f) < 0.0001f, "integer source hotspot preserves odd-height quad origin Y");
 }
 
+/// Real Trebuchet32 R/e glyph phases expose the fractional outline collapse;
+/// a one-pixel outline retains four distinct destinations without resizing glyphs.
+void TestButtonOutlineKeepsAllFourDirections(
+    float sourceX, float sourceY, float sourceWidth, float sourceHeight,
+    float glyphX, float glyphY, int width, int height, bool expectLeftCollapse) {
+    const float fontScale = 2.0f / 3.0f;
+    const float boundsWidth = static_cast<float>(width) * fontScale;
+    const float boundsHeight = static_cast<float>(height) * fontScale;
+    const auto main = Nintendo64QuadBlitGeometry::Resolve(
+        512, 256, sourceX, sourceY, sourceWidth, sourceHeight,
+        glyphX, glyphY, boundsWidth, boundsHeight);
+    const auto fractionalTop = Nintendo64QuadBlitGeometry::Resolve(
+        512, 256, sourceX, sourceY, sourceWidth, sourceHeight,
+        glyphX, glyphY - fontScale, boundsWidth, boundsHeight);
+    const auto fractionalLeft = Nintendo64QuadBlitGeometry::Resolve(
+        512, 256, sourceX, sourceY, sourceWidth, sourceHeight,
+        glyphX - fontScale, glyphY, boundsWidth, boundsHeight);
+    Check(fractionalTop.DestinationY == main.DestinationY,
+        "authored outline two thirds of a pixel loses the R/e top pass");
+    if (expectLeftCollapse) {
+        Check(fractionalLeft.DestinationX == main.DestinationX,
+            "R advance produces an e phase that loses the fractional left pass");
+    }
+    const float offsetsX[] = {-1.0f, 1.0f, 0.0f, 0.0f};
+    const float offsetsY[] = {0.0f, 0.0f, -1.0f, 1.0f};
+    for (int index = 0; index < 4; ++index) {
+        const auto pass = Nintendo64QuadBlitGeometry::Resolve(
+            512, 256, sourceX, sourceY, sourceWidth, sourceHeight,
+            glyphX + offsetsX[index], glyphY + offsetsY[index], boundsWidth, boundsHeight);
+        Check(pass.DestinationX == main.DestinationX + static_cast<int>(offsetsX[index]),
+            "one-pixel outline retains each horizontal offset");
+        Check(pass.DestinationY == main.DestinationY + static_cast<int>(offsetsY[index]),
+            "one-pixel outline retains each vertical offset");
+        Check(pass.SourceX == main.SourceX && pass.SourceY == main.SourceY
+            && pass.SourceWidth == main.SourceWidth && pass.SourceHeight == main.SourceHeight,
+            "outline offset preserves the sampled glyph");
+        Check(NearlyEqual(pass.ScaleX, main.ScaleX) && NearlyEqual(pass.ScaleY, main.ScaleY),
+            "outline offset preserves the approved glyph size");
+    }
+}
+
+/// R has OffsetY8; the following e has OffsetY14 and R's AdvanceWidth18.625.
+void TestRenderingLabelOutlineAtRealGlyphPhases() {
+    const float fontScale = 2.0f / 3.0f;
+    TestButtonOutlineKeepsAllFourDirections(
+        0.4140625f, 0.2734375f, 0.037109375f, 0.09765625f,
+        40.0f, 30.0f + 8.0f * fontScale, 19, 25, false);
+    TestButtonOutlineKeepsAllFourDirections(
+        0.59765625f, 0.38671875f, 0.03515625f, 0.07421875f,
+        40.0f + 18.625f * fontScale, 30.0f + 14.0f * fontScale, 18, 19, true);
+}
+
 } // namespace
 
 int main() {
@@ -224,6 +276,7 @@ int main() {
     TestRotatedQuadUsesItsDestinationAndSourceCenters();
     TestRotatedMenuBackgroundKeepsItsAuthoredCenter();
     TestOddSourceHotspotPreservesTopLeft();
+    TestRenderingLabelOutlineAtRealGlyphPhases();
     if (failures != 0) {
         std::fprintf(stderr, "%d quad-blit-geometry test(s) failed\n", failures);
         return 1;
