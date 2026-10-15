@@ -18,7 +18,7 @@ namespace helengine::n64 {
     public:
         explicit Nintendo64ContentStreamSource(std::string contentRootPath = "rom:/");
 
-        Stream* OpenRead(std::string assetPath) override;
+        Stream* OpenRead(HeCppString assetPath) override;
 
         static bool CanHandlePath(const char* path);
         static bool Exists(const char* path);

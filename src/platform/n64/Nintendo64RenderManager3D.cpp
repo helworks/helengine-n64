@@ -3,6 +3,7 @@
 #if HELENGINE_N64_HAS_GENERATED_CORE
 
 #include <cmath>
+#include <algorithm>
 
 #include <libdragon.h>
 #include <t3d/t3dmath.h>
@@ -10,6 +11,8 @@
 #include "AssetSerializer.hpp"
 #include "ContentManager.hpp"
 #include "Core.hpp"
+#include "CameraClearSettings.hpp"
+#include "SceneManager.hpp"
 #include "Entity.hpp"
 #include "ICamera.hpp"
 #include "IDrawable3D.hpp"
@@ -28,6 +31,9 @@
 #include "system/io/stream.hpp"
 
 #include "platform/n64/Nintendo64LightExtractor.hpp"
+#include "platform/n64/Nintendo64CameraPass.hpp"
+#include "platform/n64/Nintendo64RenderManager2D.hpp"
+#include "platform/n64/Nintendo64Video.hpp"
 #include "platform/n64/Nintendo64Renderer.hpp"
 #include "platform/n64/Nintendo64RuntimeMaterial.hpp"
 #include "platform/n64/Nintendo64RuntimeModel.hpp"
@@ -37,7 +43,7 @@ namespace {
 
 constexpr const char kN64RendererFamilyId[] = "n64-standard";
 
-::Asset* Deserialize(::IContentStreamSource* source, const std::string& path) {
+::Asset* Deserialize(::IContentStreamSource* source, const HeCppString& path) {
     if (source == nullptr) {
         throw new ArgumentNullException("contentStreamSource");
     }
@@ -50,8 +56,9 @@ constexpr const char kN64RendererFamilyId[] = "n64-standard";
 
 } // namespace
 
-Nintendo64RenderManager3D::Nintendo64RenderManager3D(Nintendo64Renderer* renderer)
-    : Renderer(renderer) {
+Nintendo64RenderManager3D::Nintendo64RenderManager3D(Nintendo64Renderer* renderer, Nintendo64Video* video,
+                                                 Nintendo64RenderManager2D* render2D)
+    : Renderer(renderer), Video(video), Render2D(render2D) {
     if (Renderer == nullptr) {
         throw new ArgumentNullException("renderer");
     }
@@ -83,7 +90,7 @@ uint32_t Nintendo64RenderManager3D::PackColor(const ::PlatformMaterialAsset* mat
 }
 
 ::RuntimeMaterial* Nintendo64RenderManager3D::BuildMaterialFromCooked(
-    std::string cookedAssetPath, ::IContentStreamSource* contentStreamSource) {
+    HeCppString cookedAssetPath, ::IContentStreamSource* contentStreamSource) {
     ::Asset* rawAsset = Deserialize(contentStreamSource, cookedAssetPath);
     ::PlatformMaterialAsset* material = he_cpp_try_cast<::PlatformMaterialAsset>(rawAsset);
     if (material == nullptr) {
@@ -107,12 +114,12 @@ uint32_t Nintendo64RenderManager3D::PackColor(const ::PlatformMaterialAsset* mat
 }
 
 ::RuntimeMaterial* Nintendo64RenderManager3D::BuildMaterialFromRawAsset(
-    ::ContentManager*, std::string) {
+    ::ContentManager*, HeCppString) {
     throw new NotSupportedException("N64 authored scenes do not load raw material assets.");
 }
 
 ::RuntimeModel* Nintendo64RenderManager3D::BuildModelFromCooked(
-    std::string cookedAssetPath, ::IContentStreamSource* contentStreamSource) {
+    HeCppString cookedAssetPath, ::IContentStreamSource* contentStreamSource) {
     ::Asset* rawAsset = Deserialize(contentStreamSource, cookedAssetPath);
     ::ModelAsset* modelAsset = he_cpp_try_cast<::ModelAsset>(rawAsset);
     if (modelAsset == nullptr) {
@@ -173,15 +180,32 @@ void Nintendo64RenderManager3D::Draw() {
     }
     ::List<::ICamera*>* cameras = OwnerCore->get_ObjectManager()->get_Cameras();
     if (cameras == nullptr || cameras->empty()) {
-        return;
-    }
-    ::ICamera* camera = (*cameras)[0];
-    if (!ConfigureCamera(camera)) {
+        if (!OwnerCore->get_SceneManager()->get_IsSceneTransitionActive()) {
+            throw new InvalidOperationException("N64 authored scene requires a camera.");
+        }
+        if (Video != nullptr) Video->Clear();
         return;
     }
     Nintendo64LightExtractor::Extract(OwnerCore->get_ObjectManager(), FrameLights);
-    Renderer->BeginScene();
-    camera->get_RenderQueue3D()->VisitOrdered(this);
+    RenderOrderedCameraPasses(*cameras,
+        [this](::ICamera* camera) {
+            if (Video == nullptr) return;
+            ApplyCameraAttachmentClears(*Video, camera->get_ClearSettings(), [](float value) {
+                return static_cast<uint8_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f));
+            });
+        },
+        [this](::ICamera* camera) {
+            if (camera->get_RenderQueue3D() == nullptr || camera->get_RenderQueue3D()->get_Count() == 0) return;
+            // Tiny3D's unbuffered viewport and retained model matrix are DMA inputs. The previous
+            // camera must finish reading them before the next pass overwrites either allocation.
+            rspq_wait();
+            if (!ConfigureCamera(camera)) throw new InvalidOperationException("N64 camera has no parent or render queue.");
+            Renderer->BeginScene();
+            camera->get_RenderQueue3D()->VisitOrdered(this);
+        },
+        [this](::ICamera* camera) {
+            if (Render2D != nullptr) Render2D->DrawCamera(camera);
+        });
 }
 
 void Nintendo64RenderManager3D::ReleaseMaterial(::RuntimeMaterial* material) {
@@ -230,6 +254,10 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
     if (lit && !model->HasNormals()) {
         throw new InvalidOperationException("N64 lit materials require cooked vertex normals.");
     }
+    // Cached models share mutable vertex colors, and the renderer reuses one
+    // retained model matrix. Tiny3D consumes both through deferred RSP DMA.
+    // Finish the previous submission before changing either input.
+    rspq_wait();
     model->SetColor(color);
 
     ::Entity* entity = drawable->get_Parent();
@@ -245,8 +273,8 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
     DrawCallCount++;
     if (!HasLoggedAuthoredDraw) {
         ::ModelAsset* rawModel = model->get_RawModelAsset();
-        const char* modelId = rawModel == nullptr ? "<unknown>" : rawModel->get_Id().c_str();
-        debugf("n64:first-authored-draw model=%s material=n64-standard lit=%d lights=%d calls=%ld\n", modelId, lit ? 1 : 0, FrameLights.DirectionalCount, static_cast<long>(DrawCallCount));
+        const HeCppString modelId = rawModel == nullptr ? HeCppString("<unknown>") : rawModel->get_Id();
+        debugf("n64:first-authored-draw model=%s material=n64-standard lit=%d lights=%d calls=%ld\n", modelId.c_str(), lit ? 1 : 0, FrameLights.DirectionalCount, static_cast<long>(DrawCallCount));
         HasLoggedAuthoredDraw = true;
     }
 }

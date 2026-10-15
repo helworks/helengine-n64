@@ -51,8 +51,12 @@ void Nintendo64Video::SetClearColor(uint8_t red, uint8_t green, uint8_t blue, ui
 }
 
 void Nintendo64Video::Clear() {
-    rdpq_clear(RGBA32(ClearRed, ClearGreen, ClearBlue, ClearAlpha));
-    rdpq_clear_z(ZBUF_MAX);
+    ClearAttachments(true, true);
+}
+
+void Nintendo64Video::ClearAttachments(bool colorEnabled, bool depthEnabled, float depth) {
+    if (colorEnabled) rdpq_clear(RGBA32(ClearRed, ClearGreen, ClearBlue, ClearAlpha));
+    if (depthEnabled) rdpq_clear_z(static_cast<uint16_t>(depth <= 0.0f ? 0 : depth >= 1.0f ? ZBUF_MAX : depth * ZBUF_MAX));
 }
 
 bool Nintendo64Video::EndFrame() {

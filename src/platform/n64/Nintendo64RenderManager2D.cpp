@@ -27,7 +27,7 @@ namespace {
 /// Reads one cooked asset through the content source and deserializes it.  This mirrors the helper in
 /// `Nintendo64RenderManager3D.cpp`: the two managers deliberately keep their own copy rather than share a
 /// header, because the only thing they have in common is these four lines.
-::Asset* Deserialize(::IContentStreamSource* source, const std::string& path) {
+::Asset* Deserialize(::IContentStreamSource* source, const HeCppString& path) {
     if (source == nullptr) {
         throw new ArgumentNullException("contentStreamSource");
     }
@@ -64,7 +64,7 @@ Nintendo64RenderManager2D::~Nintendo64RenderManager2D() {
 }
 
 ::RuntimeTexture* Nintendo64RenderManager2D::BuildTextureFromCooked(
-    std::string cookedAssetPath, ::IContentStreamSource* contentStreamSource) {
+    HeCppString cookedAssetPath, ::IContentStreamSource* contentStreamSource) {
     ::Asset* rawAsset = Deserialize(contentStreamSource, cookedAssetPath);
     ::TextureAsset* textureAsset = he_cpp_try_cast<::TextureAsset>(rawAsset);
     if (textureAsset == nullptr) {
@@ -97,6 +97,13 @@ void Nintendo64RenderManager2D::Draw() {
     if (cameras == nullptr || cameras->get_Count() <= 0) {
         return;
     }
+    for (int32_t cameraIndex = 0; cameraIndex < cameras->get_Count(); ++cameraIndex) {
+        DrawCamera((*cameras)[cameraIndex]);
+    }
+}
+
+void Nintendo64RenderManager2D::DrawCamera(::ICamera* camera) {
+    if (camera == nullptr || camera->get_RenderQueue2D() == nullptr) return;
     if (CommandListBuilder == nullptr) {
         CommandListBuilder = new ::RenderCommandListBuilder2D();
     }
@@ -115,17 +122,9 @@ void Nintendo64RenderManager2D::Draw() {
 
     const int32_t frameWidth = static_cast<int32_t>(display_get_width());
     const int32_t frameHeight = static_cast<int32_t>(display_get_height());
-    for (int32_t cameraIndex = 0; cameraIndex < cameras->get_Count(); ++cameraIndex) {
-        ::ICamera* camera = (*cameras)[cameraIndex];
-        if (camera == nullptr || camera->get_RenderQueue2D() == nullptr) {
-            continue;
-        }
-        // The builder owns and reuses this list across frames.  Deleting it here would free the builder's
-        // own state and leave the next frame reading freed memory.
-        ::RenderCommandList2D* commandList = CommandListBuilder->Build(camera->get_RenderQueue2D());
-        if (commandList == nullptr || commandList->get_Count() <= 0) {
-            continue;
-        }
+    // The builder owns and reuses this list; the camera pass must not delete it.
+    ::RenderCommandList2D* commandList = CommandListBuilder->Build(camera->get_RenderQueue2D());
+    if (commandList != nullptr && commandList->get_Count() > 0) {
         Executor.Execute(commandList, frameWidth, frameHeight);
     }
 }

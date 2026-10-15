@@ -61,6 +61,14 @@ int main() {
           "OpenRead strips rom:/ before calling dfs_open");
     delete stream;
 
+    helengine::n64::Nintendo64ContentStreamSource source;
+    IContentStreamSource* managedSource = &source;
+    Stream* managedStream = managedSource->OpenRead(HeCppString("scenes\\authored.scene"));
+    Check(managedStream != nullptr, "Managed content-source ABI returns a stream");
+    Check(lastOpenPath == "scenes/authored.scene",
+          "Managed path explicitly unwraps and normalizes before DragonFS");
+    delete managedStream;
+
     if (failures != 0) {
         std::fprintf(stderr, "%d content-source test(s) failed\n", failures);
         return EXIT_FAILURE;

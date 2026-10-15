@@ -22,7 +22,10 @@ Nintendo64InputBackend::~Nintendo64InputBackend() { joypad_close(); }
         auto input = joypad_get_inputs(port);
         pad.Connected = true;
         pad.LeftStickX = static_cast<int16_t>(input.stick_x * 256);
-        pad.LeftStickY = static_cast<int16_t>(input.stick_y * 256);
+        // libdragon is positive-up; the engine's pad contract is negative-up.
+        // Clamp raw -128 after inversion because +32768 cannot fit in int16_t.
+        const int32_t engineStickY = -static_cast<int32_t>(input.stick_y) * 256;
+        pad.LeftStickY = static_cast<int16_t>(engineStickY > 32767 ? 32767 : engineStickY);
         const auto button = [&](::InputGamepadButton value, bool down) { pad.SetButtonDown(value, down); };
         button(::InputGamepadButton::South, input.btn.a); button(::InputGamepadButton::East, input.btn.b);
         button(::InputGamepadButton::West, input.btn.c_left); button(::InputGamepadButton::North, input.btn.c_up);

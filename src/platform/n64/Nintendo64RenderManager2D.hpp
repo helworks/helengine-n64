@@ -3,17 +3,17 @@
 #if HELENGINE_N64_HAS_GENERATED_CORE
 
 #include <cstdint>
-#include <string>
 
 #include "RenderCommandListBuilder2D.hpp"
 #include "RenderManager2D.hpp"
+#include "ICamera.hpp"
 
 #include "platform/n64/Nintendo64RenderCommandExecutor2D.hpp"
 
 namespace helengine::n64 {
 
 /// Screen-space 2D render manager for the Nintendo 64: turns cooked engine texture payloads into RDP-ready
-/// surfaces and, once the 3D pass has finished the frame, flattens every authored camera's render queue
+/// surfaces and flattens each authored camera's render queue after that camera's 3D pass
 /// through the shared `RenderCommandListBuilder2D` and executes the result with `Nintendo64RenderCommandExecutor2D`.
 class Nintendo64RenderManager2D final : public ::RenderManager2D {
 public:
@@ -23,9 +23,11 @@ public:
     /// Builds one runtime texture from an already deserialized cooked engine texture payload.
     ::RuntimeTexture* BuildTextureFromRaw(::TextureAsset* data) override;
     /// Builds one runtime texture from a cooked engine texture payload read through the content source.
-    ::RuntimeTexture* BuildTextureFromCooked(std::string cookedAssetPath, ::IContentStreamSource* contentStreamSource) override;
+    ::RuntimeTexture* BuildTextureFromCooked(HeCppString cookedAssetPath, ::IContentStreamSource* contentStreamSource) override;
     /// Runs the screen-space 2D pass after the 3D pass for every authored camera.
     void Draw() override;
+    /// Executes only this camera's queue, allowing the host's ordered 3D/2D camera passes to interleave.
+    void DrawCamera(::ICamera* camera);
     /// Fails loudly. Generated Core only reaches this by visiting the 2D queue with this manager as the
     /// visitor; the N64 pass instead drives `Draw` from a command list built by `RenderCommandListBuilder2D`,
     /// so arriving here means the pass was driven the old way and the drawable would be silently dropped.

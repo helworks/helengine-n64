@@ -33,6 +33,21 @@ $contentRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
 & docker @contentRun
 if ($LASTEXITCODE -ne 0) { throw 'N64 content-source tests failed.' }
 
+$inputCompile = @(
+    'run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', 'g++',
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-pedantic',
+    '-DHELENGINE_N64_HAS_GENERATED_CORE=1', '-Itests/inputbackend-stubs', '-Isrc',
+    'tests/Nintendo64InputBackendTests.cpp', 'src/platform/n64/Nintendo64InputBackend.cpp',
+    '-o', 'build/n64-input-backend-tests'
+)
+& docker @inputCompile
+if ($LASTEXITCODE -ne 0) { throw 'N64 input-backend test compilation failed.' }
+$inputRun = @('run', '--rm', '-v', $mount, '-w', '/workspace',
+    'helengine-n64-build', './build/n64-input-backend-tests')
+& docker @inputRun
+if ($LASTEXITCODE -ne 0) { throw 'N64 input-backend tests failed.' }
+
 $lightCompile = @(
     'run', '--rm', '-v', $mount, '-w', '/workspace',
     'helengine-n64-build', 'g++',

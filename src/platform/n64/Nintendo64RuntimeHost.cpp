@@ -32,22 +32,16 @@
 #include "platform/n64/Nintendo64RenderManager2D.hpp"
 #include "platform/n64/Nintendo64RenderManager3D.hpp"
 #include "platform/n64/Nintendo64SceneBootstrap.hpp"
+#include "platform/n64/Nintendo64SceneStartup.hpp"
 #if HELENGINE_N64_CPU_PROFILE
 #include "platform/n64/Nintendo64CpuProfileSink.hpp"
 #endif
 
 extern "C" const char* he_get_runtime_startup_scene_id();
+extern "C" const char* he_get_runtime_loading_screen_scene_id();
+extern "C" double he_get_runtime_scene_loading_budget_milliseconds();
 
 namespace helengine::n64 {
-
-namespace {
-
-uint8_t ToRgbaByte(float channel) {
-    const float clamped = std::clamp(channel, 0.0f, 1.0f);
-    return static_cast<uint8_t>(std::lround(clamped * 255.0f));
-}
-
-} // namespace
 
 bool Nintendo64RuntimeHost::Initialize() {
     debug_init_isviewer();
@@ -84,6 +78,12 @@ bool Nintendo64RuntimeHost::Initialize() {
     InitializationOptions->set_DefaultUpdateDeltaSeconds(1.0 / 60.0);
     InitializationOptions->set_PhysicsFixedStepSeconds(1.0 / 60.0);
     InitializationOptions->set_PhysicsMaxStepsPerUpdate(1);
+    const double loadingBudget = he_get_runtime_scene_loading_budget_milliseconds();
+    if (!std::isfinite(loadingBudget) || loadingBudget <= 0.0) {
+        debugf("n64:error invalid-scene-loading-budget\n");
+        return false;
+    }
+    InitializationOptions->set_SceneLoadingBudgetMilliseconds(loadingBudget);
     SceneCatalog = BuildNintendo64RuntimeSceneCatalog();
     if (SceneCatalog == nullptr) {
         debugf("n64:error runtime-scene-catalog-missing\n");
@@ -92,8 +92,8 @@ bool Nintendo64RuntimeHost::Initialize() {
     InitializationOptions->set_SceneCatalog(SceneCatalog);
     InitializationOptions->set_CommitPendingSceneOperationsDuringDraw(false);
 
-    Render3D = new Nintendo64RenderManager3D(&Renderer);
     Render2D = new Nintendo64RenderManager2D();
+    Render3D = new Nintendo64RenderManager3D(&Renderer, &Video, Render2D);
     Input = new Nintendo64InputBackend();
     Platform = new ::PlatformInfo("n64", "0.2.0");
     Render3D->AddWindow(0, 320, 240);
@@ -107,8 +107,10 @@ bool Nintendo64RuntimeHost::Initialize() {
         return false;
     }
     debugf("n64:startup-scene id=%s\n", startupSceneId);
-    EngineCore->get_SceneManager()->LoadScene(startupSceneId, ::SceneLoadMode::Single);
-    EngineCore->get_SceneManager()->CommitPendingOperationsAtFrameBoundary();
+    const char* loadingSceneId = he_get_runtime_loading_screen_scene_id();
+    const bool transitionRequested = StartAuthoredScenes(*EngineCore->get_SceneManager(), startupSceneId, loadingSceneId);
+    debugf("n64:startup-policy loading=%s budget-ms=%.3f transition=%d\n",
+           loadingSceneId == nullptr ? "" : loadingSceneId, loadingBudget, transitionRequested ? 1 : 0);
     ::ObjectManager* objectManager = EngineCore->get_ObjectManager();
     const long cameraCount = objectManager == nullptr || objectManager->get_Cameras() == nullptr
         ? 0
@@ -126,24 +128,9 @@ bool Nintendo64RuntimeHost::Initialize() {
         ? 0
         : static_cast<long>(objectManager->get_AmbientLights()->get_Count());
     debugf("n64:scene-ready cameras=%ld drawables3d=%ld drawables2d=%ld directional=%ld ambient=%ld\n", cameraCount, drawableCount, drawable2dCount, directionalLightCount, ambientLightCount);
-    if (cameraCount != 1 || drawableCount > 1) {
+    if (cameraCount < 1 || drawableCount > 1) {
         debugf("n64:error authored-scene-cardinality\n");
         return false;
-    }
-    ::ICamera* camera = (*objectManager->get_Cameras()).get_Item(0);
-    if (camera != nullptr) {
-        ::CameraClearSettings clearSettings = camera->get_ClearSettings();
-        if (clearSettings.get_ClearColorEnabled()) {
-            const ::float4 clearColor = clearSettings.get_ClearColor();
-            const uint8_t red = ToRgbaByte(clearColor.X);
-            const uint8_t green = ToRgbaByte(clearColor.Y);
-            const uint8_t blue = ToRgbaByte(clearColor.Z);
-            const uint8_t alpha = ToRgbaByte(clearColor.W);
-            Video.SetClearColor(red, green, blue, alpha);
-            debugf("n64:camera-clear rgba=%ld/%ld/%ld/%ld\n",
-                   static_cast<long>(red), static_cast<long>(green),
-                   static_cast<long>(blue), static_cast<long>(alpha));
-        }
     }
     if (directionalLightCount > kMaxDirectionalLights) {
         debugf("n64:error directional-light-limit count=%ld\n", directionalLightCount);
@@ -194,10 +181,11 @@ int Nintendo64RuntimeHost::Run() {
     uint8_t loggedTitleMetrics = 0;
     // Initial viewport scaling can complete after the menu update; sample headings after three completed frames.
     uint8_t completedDiagnosticFrames = 0;
+    bool hasLoggedPublishedScene = false;
     // Trace the existing Core clock only during the first eight updates, without a per-frame log stream.
     uint8_t loggedFrameDeltas = 0;
-    std::string lastMenuPanel;
-    std::string lastMenuSelection;
+    HeCppString lastMenuPanel;
+    HeCppString lastMenuSelection;
 #if HELENGINE_N64_CPU_PROFILE
     std::uint64_t frameSequence = 0u;
 #endif
@@ -206,7 +194,6 @@ int Nintendo64RuntimeHost::Run() {
             Shutdown();
             return 1;
         }
-        Video.Clear();
 #if HELENGINE_N64_CPU_PROFILE
         ++frameSequence;
         if (CpuProfile->HasPendingReport()) CpuProfile->EmitPendingReport();
@@ -218,10 +205,21 @@ int Nintendo64RuntimeHost::Run() {
             debugf("n64:frame-delta seconds=%.9f\n", EngineCore->get_FrameDeltaSeconds());
             ++loggedFrameDeltas;
         }
+        // Asset/font objects can exist while the target is still being prepared. Only measure
+        // the published scene after three completed stable frames, including its viewport updates.
+        const bool sceneReadyForDiagnostics = !EngineCore->get_SceneManager()->get_IsSceneTransitionActive()
+            && completedDiagnosticFrames >= 3;
+        if (sceneReadyForDiagnostics && !hasLoggedPublishedScene) {
+            auto* cameras = EngineCore->get_ObjectManager()->get_Cameras();
+            debugf("n64:scene-published-ready cameras=%ld stable-frames=%u\n",
+                   cameras == nullptr ? 0L : static_cast<long>(cameras->get_Count()),
+                   static_cast<unsigned>(completedDiagnosticFrames));
+            hasLoggedPublishedScene = true;
+        }
         // State changes are useful on hardware's ISViewer/USB log too: emit once
         // per menu transition, rather than printing continuously in the frame loop.
         auto* entities = EngineCore->get_ObjectManager()->get_Entities();
-        for (int32_t entityIndex = 0; entities != nullptr && entityIndex < entities->get_Count(); ++entityIndex) {
+        for (int32_t entityIndex = 0; sceneReadyForDiagnostics && entities != nullptr && entityIndex < entities->get_Count(); ++entityIndex) {
             auto* entity = entities->get_Item(entityIndex);
             auto* components = entity == nullptr ? nullptr : entity->get_Components();
             for (int32_t componentIndex = 0; components != nullptr && componentIndex < components->get_Count(); ++componentIndex) {
@@ -285,22 +283,9 @@ int Nintendo64RuntimeHost::Run() {
         if (updateEnd >= updateStart) CpuProfile->RecordNativeStage(Nintendo64CpuProfileSink::HostUpdate, updateEnd - updateStart);
         else CpuProfile->ClockFault();
 #endif
-        // Core::Draw only runs the 3D render manager; RenderManager2D::Draw is a hook each host drives itself.
-        // The screen-space 2D pass therefore runs here, after the Tiny3D pass has queued its triangles and
-        // while the frame buffer is still attached, so the sprite blits land over the rendered 3D scene.
+        // The native 3D manager interleaves each current camera's clear, 3D and 2D passes. Overlay
+        // cameras preserve preceding pixels and every camera shares this single attached frame.
         EngineCore->Draw();
-        ::RenderManager2D* renderManager2D = EngineCore->get_RenderManager2D();
-        if (renderManager2D != nullptr) {
-#if HELENGINE_N64_CPU_PROFILE
-            const std::uint64_t draw2dStart = CpuProfile->ReadMicroseconds();
-#endif
-            renderManager2D->Draw();
-#if HELENGINE_N64_CPU_PROFILE
-            const std::uint64_t draw2dEnd = CpuProfile->ReadMicroseconds();
-            if (draw2dEnd >= draw2dStart) CpuProfile->RecordNativeStage(Nintendo64CpuProfileSink::RenderManager2D, draw2dEnd - draw2dStart);
-            else CpuProfile->ClockFault();
-#endif
-        }
         if (!Video.EndFrame()) {
             Shutdown();
             return 1;
@@ -308,7 +293,12 @@ int Nintendo64RuntimeHost::Run() {
         // Scene operations are intentionally not committed during Draw: resources may still be in use by
         // the RDP until EndFrame's detach-and-wait finishes. Commit now, at that completed frame boundary.
         EngineCore->CompleteFrameBoundary();
-        if (completedDiagnosticFrames < 3) ++completedDiagnosticFrames;
+        if (EngineCore->get_SceneManager()->get_IsSceneTransitionActive()) {
+            completedDiagnosticFrames = 0;
+            hasLoggedPublishedScene = false;
+        } else if (completedDiagnosticFrames < 3) {
+            ++completedDiagnosticFrames;
+        }
 #if HELENGINE_N64_CPU_PROFILE
         CpuProfile->EndFrame(frameSequence);
 #endif

@@ -21,8 +21,8 @@ namespace helengine::n64 {
         : ContentRootPath(NormalizeRootPath(contentRootPath)) {
     }
 
-    Stream* Nintendo64ContentStreamSource::OpenRead(std::string assetPath) {
-        return Nintendo64ContentStreamSource::OpenRead(BuildAssetPath(assetPath).c_str());
+    Stream* Nintendo64ContentStreamSource::OpenRead(HeCppString assetPath) {
+        return Nintendo64ContentStreamSource::OpenRead(BuildAssetPath(assetPath.raw()).c_str());
     }
 
     bool Nintendo64ContentStreamSource::CanHandlePath(const char* path) {
