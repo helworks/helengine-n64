@@ -258,6 +258,19 @@ void TestRenderingLabelOutlineAtRealGlyphPhases() {
 } // namespace
 
 int main() {
+    const float x[4] = {30,10,18,38}, y[4] = {20,25,65,60};
+    float affine[3][3]{};
+    Check(!Nintendo64QuadBlitGeometry::IsAxisAligned(x, y), "mirrored shear uses affine path");
+    Check(Nintendo64QuadBlitGeometry::TryResolveAffineTransform(x, y, 16, 8, affine), "mirrored shear is drawable");
+    const float u[4] = {0,16,16,0}, v[4] = {0,0,8,8};
+    for (unsigned i = 0; i < 4; ++i) {
+        Check(NearlyEqual(affine[0][0]*u[i]+affine[1][0]*v[i]+affine[2][0], x[i]), "affine maps each source X corner");
+        Check(NearlyEqual(affine[0][1]*u[i]+affine[1][1]*v[i]+affine[2][1], y[i]), "affine maps each source Y corner");
+    }
+    const float axisX[4] = {10,30,30,10}, axisY[4] = {20,20,60,60};
+    Check(Nintendo64QuadBlitGeometry::IsAxisAligned(axisX, axisY), "ordinary rectangles retain fast blit");
+    const float flatY[4] = {20,20,20,20};
+    Check(!Nintendo64QuadBlitGeometry::TryResolveAffineTransform(axisX, flatY, 16, 8, affine), "zero-area quad is skipped");
     TestGlyphSubRectDenormalizesOntoTexels();
     TestAxesScaleIndependently();
     TestSubRectBeforeTheNearEdgeIsCropped();

@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "RenderCommandList2D.hpp"
+#include "SpriteQuad2D.hpp"
 
 namespace helengine::n64 {
 
@@ -27,6 +28,10 @@ public:
     int32_t DrawCallCount() const;
 
 private:
+    /// Draws resolved sprite corners using the SDK affine blitter and its existing TMEM chunking.
+    void BlitSpriteQuad(::RuntimeTexture* texture, ::SpriteQuad2D quad, ::float4 sourceRect, ::byte4 color,
+        Nintendo64TextureBindingCache& bindings);
+
     /// Blits one textured or glyph quad.
     /// <param name="texture">Runtime texture the quad samples.</param>
     /// <param name="bounds">Destination rectangle in frame-buffer pixels.</param>

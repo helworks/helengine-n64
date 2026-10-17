@@ -81,6 +81,14 @@ public:
     static Nintendo64QuadBlitRotation2D ResolveRotation(const Nintendo64QuadBlitGeometry2D& geometry,
                                                         float rotationRadians);
 
+    /// True only for a positive, exactly axis-aligned TL/TR/BR/BL quad.
+    static bool IsAxisAligned(const float (&x)[4], const float (&y)[4]);
+
+    /// Builds libdragon's column-major source-pixel-to-screen matrix without angle/scale decomposition.
+    /// Returns false for nonfinite or zero-area corners and nonpositive source extents.
+    static bool TryResolveAffineTransform(const float (&x)[4], const float (&y)[4],
+        int32_t sourceWidth, int32_t sourceHeight, float (&matrix)[3][3]);
+
     /// Rounds one coordinate to the nearest integer, halves away from zero.
     /// <param name="value">Value to round.</param>
     /// <returns>Nearest integer.</returns>

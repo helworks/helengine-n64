@@ -4,6 +4,27 @@
 
 namespace helengine::n64 {
 
+bool Nintendo64QuadBlitGeometry::IsAxisAligned(const float (&x)[4], const float (&y)[4]) {
+    return y[0] == y[1] && y[2] == y[3] && x[0] == x[3] && x[1] == x[2]
+        && x[1] > x[0] && y[3] > y[0];
+}
+
+bool Nintendo64QuadBlitGeometry::TryResolveAffineTransform(const float (&x)[4], const float (&y)[4],
+    int32_t sourceWidth, int32_t sourceHeight, float (&matrix)[3][3]) {
+    if (sourceWidth <= 0 || sourceHeight <= 0) return false;
+    for (unsigned i = 0; i < 4; ++i) {
+        if (!std::isfinite(x[i]) || !std::isfinite(y[i])) return false;
+    }
+    const float rightX = x[1] - x[0], rightY = y[1] - y[0];
+    const float downX = x[3] - x[0], downY = y[3] - y[0];
+    const float area = rightX * downY - rightY * downX;
+    if (!std::isfinite(area) || area == 0.0f) return false;
+    matrix[0][0] = rightX / sourceWidth; matrix[0][1] = rightY / sourceWidth; matrix[0][2] = 0;
+    matrix[1][0] = downX / sourceHeight; matrix[1][1] = downY / sourceHeight; matrix[1][2] = 0;
+    matrix[2][0] = x[0]; matrix[2][1] = y[0]; matrix[2][2] = 1;
+    return true;
+}
+
 int32_t Nintendo64QuadBlitGeometry::RoundToInt(float value) {
     return static_cast<int32_t>(std::round(value));
 }

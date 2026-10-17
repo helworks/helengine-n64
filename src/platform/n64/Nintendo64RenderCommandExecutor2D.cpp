@@ -100,14 +100,11 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
         }
         if (commandType == ::RenderCommand2DType::TexturedQuad) {
             const int32_t payloadIndex = commandList->GetTexturedQuadPayloadIndex(commandIndex);
-            const float rotationRadians = commandList->GetTexturedQuadRotation(payloadIndex);
-            BlitQuad(commandList->GetTexturedQuadTexture(payloadIndex),
-                     commandList->GetTexturedQuadBounds(payloadIndex),
+            BlitSpriteQuad(commandList->GetTexturedQuadTexture(payloadIndex),
+                     commandList->GetTexturedQuadGeometry(payloadIndex),
                      commandList->GetTexturedQuadSourceRect(payloadIndex),
                      commandList->GetTexturedQuadColor(payloadIndex),
-                     false,
-                     bindings,
-                     rotationRadians);
+                     bindings);
             continue;
         }
         if (commandType == ::RenderCommand2DType::GlyphQuad) {
@@ -161,6 +158,38 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
                static_cast<long>(frameWidth),
                static_cast<long>(frameHeight));
         HasLoggedCommandList = true;
+    }
+}
+
+void Nintendo64RenderCommandExecutor2D::BlitSpriteQuad(::RuntimeTexture* texture, ::SpriteQuad2D quad,
+    ::float4 sourceRect, ::byte4 color, Nintendo64TextureBindingCache& bindings) {
+    const float x[4] = {quad.TopLeft.X, quad.TopRight.X, quad.BottomRight.X, quad.BottomLeft.X};
+    const float y[4] = {quad.TopLeft.Y, quad.TopRight.Y, quad.BottomRight.Y, quad.BottomLeft.Y};
+    if (Nintendo64QuadBlitGeometry::IsAxisAligned(x, y)) {
+        BlitQuad(texture, ::float4(x[0], y[0], x[1] - x[0], y[3] - y[0]), sourceRect, color, false, bindings);
+        return;
+    }
+    auto* concreteTexture = he_cpp_try_cast<Nintendo64RuntimeTexture>(texture);
+    if (concreteTexture == nullptr || concreteTexture->Surface() == nullptr) return;
+    const auto source = Nintendo64QuadBlitGeometry::Resolve(concreteTexture->get_Width(), concreteTexture->get_Height(),
+        sourceRect.X, sourceRect.Y, sourceRect.Z, sourceRect.W, 0, 0, 1, 1);
+    if (source.Kind != Nintendo64QuadBlitKind::Drawable) return;
+    fm_mat3_t matrix{};
+    if (!Nintendo64QuadBlitGeometry::TryResolveAffineTransform(x, y, source.SourceWidth, source.SourceHeight, matrix.m)) return;
+    rdpq_blitparms_t parms{};
+    parms.s0 = source.SourceX; parms.t0 = source.SourceY;
+    parms.width = source.SourceWidth; parms.height = source.SourceHeight;
+    parms.allow_xform = true;
+    rdpq_set_prim_color(RGBA32(color.X, color.Y, color.Z, color.W));
+    bindings.Bind(concreteTexture);
+    rdpq_xform_push();
+    rdpq_xform_mtx_load(&matrix);
+    rdpq_tex_blit(concreteTexture->Surface(), 0, 0, &parms);
+    rdpq_xform_pop();
+    ++DrawCallCountValue;
+    if (!HasLoggedSpriteDraw) {
+        debugf("n64:first-sprite-draw affine=1 calls=%ld\n", static_cast<long>(DrawCallCountValue));
+        HasLoggedSpriteDraw = true;
     }
 }
 
