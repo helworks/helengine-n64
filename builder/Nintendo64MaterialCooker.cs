@@ -4,7 +4,7 @@ using helengine.baseplatform.Results;
 
 namespace helengine.n64.builder;
 
-/// <summary>Cooks the single opaque N64 material schema with lit or unlit shading.</summary>
+/// <summary>Cooks opaque N64 materials with optional texture binding and lit or unlit shading.</summary>
 public sealed class Nintendo64MaterialCooker {
     public PlatformMaterialCookResult Cook(PlatformMaterialCookRequest request) {
         if (request == null) throw new ArgumentNullException(nameof(request));
@@ -16,7 +16,7 @@ public sealed class Nintendo64MaterialCooker {
         }
 
         string texture = Resolve(request.FieldValues, Nintendo64MaterialSchemaIds.TextureRelativePathFieldId);
-        if (!string.IsNullOrWhiteSpace(texture)) throw new InvalidOperationException("N64 n64-standard-v1 does not support texture bindings.");
+        if (texture.Length != 0) texture = Nintendo64ContentStager.NormalizeRelativePath(texture);
         string lighting = Resolve(request.FieldValues, Nintendo64MaterialSchemaIds.LightingModeFieldId, Nintendo64MaterialSchemaIds.LightingLitValue);
         bool lit = string.Equals(lighting, Nintendo64MaterialSchemaIds.LightingLitValue, StringComparison.OrdinalIgnoreCase);
         if (!lit && !string.Equals(lighting, Nintendo64MaterialSchemaIds.LightingUnlitValue, StringComparison.OrdinalIgnoreCase)) {
@@ -31,7 +31,7 @@ public sealed class Nintendo64MaterialCooker {
         helengine.PlatformMaterialAsset cooked = new() {
             Id = request.MaterialAssetId,
             RendererFamilyId = string.IsNullOrWhiteSpace(request.SelectedGraphicsProfileId) ? Nintendo64MaterialSchemaIds.StandardGraphicsProfileId : request.SelectedGraphicsProfileId,
-            TextureRelativePath = string.Empty,
+            TextureRelativePath = texture,
             DoubleSided = false,
             UseVertexColor = false,
             Lit = lit,

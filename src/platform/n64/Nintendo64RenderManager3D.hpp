@@ -41,7 +41,7 @@ private:
     Nintendo64FrameLights FrameLights;
 
     static uint32_t PackColor(const ::PlatformMaterialAsset* material);
-    ::RuntimeMaterial* BuildMaterialAsset(::PlatformMaterialAsset* materialAsset);
+    ::RuntimeMaterial* BuildMaterialAsset(::PlatformMaterialAsset* materialAsset, ::IContentStreamSource* source);
     bool ConfigureCamera(::ICamera* camera);
 };
 

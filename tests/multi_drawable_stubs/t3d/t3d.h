@@ -10,6 +10,8 @@ struct T3DViewport {};
 struct T3DInitParams {};
 using T3DDrawFlags = uint32_t;
 constexpr unsigned T3D_FLAG_SHADED=1, T3D_FLAG_DEPTH=2, T3D_FLAG_CULL_BACK=4, T3D_FLAG_NO_LIGHT=8;
+constexpr unsigned T3D_FLAG_TEXTURED=16;
+inline T3DDrawFlags lastDrawFlags=0;
 #define T3D_DEG_TO_RAD(value) ((value)*0.017453292519943295f)
 namespace deferred_rsp {
 struct Pending { const T3DVertPacked* vertices; const T3DMat4FP* matrix; };
@@ -40,7 +42,7 @@ inline void t3d_mat4_to_fixed(T3DMat4FP* output,const T3DMat4* input) { *output=
 inline void t3d_light_set_ambient(const uint8_t*) {}
 inline void t3d_light_set_directional(int,const uint8_t*,const T3DVec3*) {}
 inline void t3d_light_set_count(int) {}
-inline void t3d_state_set_drawflags(T3DDrawFlags) {}
+inline void t3d_state_set_drawflags(T3DDrawFlags flags) {lastDrawFlags=flags;}
 inline void t3d_matrix_push(const T3DMat4FP* matrix) { deferred_rsp::matrix=matrix; }
 inline void t3d_matrix_pop(int) {}
 inline void t3d_vert_load(const T3DVertPacked* vertices,unsigned,unsigned) { deferred_rsp::vertices=vertices; }

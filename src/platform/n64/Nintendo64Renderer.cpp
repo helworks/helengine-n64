@@ -89,18 +89,27 @@ void Nintendo64Renderer::SetAuthoredCamera(const T3DMat4& viewMatrix, float fiel
     t3d_viewport_set_view_matrix(&Viewport, &viewMatrix);
 }
 
-void Nintendo64Renderer::DrawAuthoredMesh(const T3DVertPacked* vertices, uint32_t vertexCount, const uint16_t* indices, uint32_t indexCount, const T3DMat4& modelMatrix, bool doubleSided, bool lit, const Nintendo64FrameLights& lights) {
+void Nintendo64Renderer::DrawAuthoredMesh(const T3DVertPacked* vertices, uint32_t vertexCount, const uint16_t* indices, uint32_t indexCount, const T3DMat4& modelMatrix, bool doubleSided, bool lit, const Nintendo64FrameLights& lights, const surface_t* texture) {
     if (!Initialized || !Authored || vertices == nullptr || indices == nullptr || vertexCount == 0 || indexCount == 0 || ModelMatrix == nullptr) {
         return;
     }
 
-    rdpq_mode_combiner(RDPQ_COMBINER_SHADE);
+    rdpq_mode_combiner(texture == nullptr ? RDPQ_COMBINER_SHADE : RDPQ_COMBINER_TEX_SHADE);
     rdpq_mode_antialias(AA_NONE);
     rdpq_mode_zbuf(true, true);
     rdpq_mode_blender(0);
     rdpq_mode_fog(0);
+    rdpq_mode_alphacompare(0);
+    rdpq_mode_filter(FILTER_POINT);
+    rdpq_mode_persp(true);
+    if (texture != nullptr) {
+        rdpq_tex_upload(TILE0, texture, nullptr);
+    } else {
+        rdpq_mode_tlut(TLUT_NONE);
+    }
 
     uint32_t drawFlags = T3D_FLAG_SHADED | T3D_FLAG_DEPTH | (doubleSided ? 0u : static_cast<uint32_t>(T3D_FLAG_CULL_BACK));
+    if (texture != nullptr) drawFlags |= T3D_FLAG_TEXTURED;
     if (lit) {
         t3d_light_set_ambient(lights.Ambient);
         for (int index = 0; index < lights.DirectionalCount; index++) {

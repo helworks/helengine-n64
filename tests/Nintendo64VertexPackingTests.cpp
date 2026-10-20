@@ -1,5 +1,7 @@
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <limits>
 
 #include "src/platform/n64/Nintendo64VertexPacking.hpp"
 
@@ -86,12 +88,63 @@ void TestHigherIndicesAlternateSlotsAndHonourTheScale() {
           "logical index 3 writes slot B and positions scale by the supplied scale");
 }
 
+void TestTextureCoordinatesUseTexelDimensionsAndPreserveOtherFields() {
+    T3DVertPacked packed = MakeSentinelVertex();
+    T3DVertPacked expected = packed;
+    const float uv[2] = {0.25f, 0.75f};
+    Check(helengine::n64::Nintendo64VertexPacking::WriteTextureCoordinates(packed, 0, uv, 64, 32),
+          "finite UVs fit the Tiny3D texture-coordinate range");
+    expected.stA[0] = 512;
+    expected.stA[1] = 768;
+    Check(std::memcmp(&packed, &expected, sizeof(packed)) == 0,
+          "UV packing scales U/V by width/height and 32 without flipping V or changing other fields");
+
+    const float wrappedUv[2] = {-0.1f, 1.25f};
+    Check(helengine::n64::Nintendo64VertexPacking::WriteTextureCoordinates(packed, 3, wrappedUv, 4, 8),
+          "signed and repeated UV coordinates are supported within the fixed-point range");
+    expected.stB[0] = -12; // SDK conversion truncates toward zero.
+    expected.stB[1] = 320;
+    Check(std::memcmp(&packed, &expected, sizeof(packed)) == 0,
+          "odd logical UV slot follows SDK truncation and preserves the even slot");
+}
+
+void TestInvalidTextureCoordinatesDoNotModifyTheVertex() {
+    const float invalidUvs[][2] = {
+        {std::numeric_limits<float>::quiet_NaN(), 0.0f},
+        {0.0f, std::numeric_limits<float>::infinity()},
+        {1024.0f, 0.0f}, {0.0f, -1024.03125f}
+    };
+    for (const auto& uv : invalidUvs) {
+        T3DVertPacked packed = MakeSentinelVertex();
+        const T3DVertPacked before = packed;
+        Check(!helengine::n64::Nintendo64VertexPacking::WriteTextureCoordinates(packed, 1, uv, 1, 1),
+              "nonfinite and overflowing texture coordinates are rejected");
+        Check(std::memcmp(&packed, &before, sizeof(packed)) == 0,
+              "rejected UVs leave both packed slots unchanged");
+    }
+    T3DVertPacked packed = MakeSentinelVertex();
+    const T3DVertPacked before = packed;
+    const float zeroUv[2] = {0.0f, 0.0f};
+    Check(!helengine::n64::Nintendo64VertexPacking::WriteTextureCoordinates(packed, 0, zeroUv, 0, 16),
+          "zero texture width is rejected even for zero UV");
+    Check(!helengine::n64::Nintendo64VertexPacking::WriteTextureCoordinates(packed, 0, zeroUv, 16, 0),
+          "zero texture height is rejected even for zero UV");
+    Check(std::memcmp(&packed, &before, sizeof(packed)) == 0, "invalid dimensions leave the vertex untouched");
+
+    const float boundary[2] = {32767.0f / 32.0f, -1024.0f};
+    Check(helengine::n64::Nintendo64VertexPacking::WriteTextureCoordinates(packed, 0, boundary, 1, 1),
+          "both signed16 endpoints are representable");
+    Check(packed.stA[0] == 32767 && packed.stA[1] == -32768, "signed16 endpoints pack exactly");
+}
+
 } // namespace
 
 int main() {
     TestEvenIndexWritesSlotAOnly();
     TestOddIndexWritesSlotBOnly();
     TestHigherIndicesAlternateSlotsAndHonourTheScale();
+    TestTextureCoordinatesUseTexelDimensionsAndPreserveOtherFields();
+    TestInvalidTextureCoordinatesDoNotModifyTheVertex();
     if (failures != 0) {
         std::fprintf(stderr, "%d vertex-packing test(s) failed\n", failures);
         return 1;

@@ -89,6 +89,18 @@ bool Nintendo64RuntimeModel::Initialize(const ::ModelAsset* asset) {
             }
         }
     }
+    const bool hasTextureCoordinates = asset->TexCoords != nullptr && asset->TexCoords->get_Length() == vertexCount;
+    if (asset->TexCoords != nullptr && asset->TexCoords->get_Length() != 0 && !hasTextureCoordinates) {
+        return false; // a partial UV array cannot address every packed vertex
+    }
+    if (hasTextureCoordinates) {
+        for (int32_t vertex = 0; vertex < vertexCount; vertex++) {
+            const float2& uv = (*asset->TexCoords)[vertex];
+            if (!std::isfinite(uv.X) || !std::isfinite(uv.Y)) {
+                return false;
+            }
+        }
+    }
 
     VerticesValue = static_cast<T3DVertPacked*>(
         malloc_uncached(sizeof(T3DVertPacked) * static_cast<size_t>((vertexCount + 1) / 2)));
@@ -107,6 +119,7 @@ bool Nintendo64RuntimeModel::Initialize(const ::ModelAsset* asset) {
             hasNormals ? &(*asset->Normals)[vertex] : nullptr);
     }
     HasNormalsValue = hasNormals;
+    HasTextureCoordinatesValue = hasTextureCoordinates;
     for (int32_t index = 0; index < indexCount; index++) {
         IndicesValue[index] = (*asset->Indices16)[index];
     }
@@ -138,6 +151,7 @@ void Nintendo64RuntimeModel::Dispose() {
     VertexCountValue = 0;
     IndexCountValue = 0;
     HasNormalsValue = false;
+    HasTextureCoordinatesValue = false;
     ::RuntimeModel::Dispose();
 }
 
@@ -152,6 +166,34 @@ void Nintendo64RuntimeModel::SetColor(uint32_t color) {
             VerticesValue[vertex / 2].rgbaB = color;
         }
     }
+}
+
+bool Nintendo64RuntimeModel::SetTextureDimensions(uint32_t width, uint32_t height) {
+    if (!HasTextureCoordinatesValue || VerticesValue == nullptr || width == 0 || height == 0) {
+        return false;
+    }
+    const ::ModelAsset* asset = get_RawModelAsset();
+    if (asset == nullptr || asset->TexCoords == nullptr ||
+        asset->TexCoords->get_Length() != static_cast<int32_t>(VertexCountValue)) {
+        return false;
+    }
+    // Validate every conversion before writing any DMA-visible vertex. UVs stay
+    // in the retained raw asset; material changes never rescale packed values.
+    T3DVertPacked validated = {};
+    for (uint32_t vertex = 0; vertex < VertexCountValue; vertex++) {
+        const float2& source = (*asset->TexCoords)[vertex];
+        const float uv[2] = {source.X, source.Y};
+        if (!Nintendo64VertexPacking::WriteTextureCoordinates(validated, vertex, uv, width, height)) {
+            return false;
+        }
+    }
+    for (uint32_t vertex = 0; vertex < VertexCountValue; vertex++) {
+        const float2& source = (*asset->TexCoords)[vertex];
+        const float uv[2] = {source.X, source.Y};
+        // No callbacks or source mutations occur between validation and writing.
+        Nintendo64VertexPacking::WriteTextureCoordinates(VerticesValue[vertex / 2], vertex, uv, width, height);
+    }
+    return true;
 }
 
 } // namespace helengine::n64

@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <memory>
 
 #include <libdragon.h>
 #include <t3d/t3dmath.h>
@@ -11,6 +12,7 @@
 #include "AssetSerializer.hpp"
 #include "ContentManager.hpp"
 #include "Core.hpp"
+#include "CoreInitializationOptions.hpp"
 #include "CameraClearSettings.hpp"
 #include "SceneManager.hpp"
 #include "Entity.hpp"
@@ -37,6 +39,7 @@
 #include "platform/n64/Nintendo64Renderer.hpp"
 #include "platform/n64/Nintendo64RuntimeMaterial.hpp"
 #include "platform/n64/Nintendo64RuntimeModel.hpp"
+#include "platform/n64/Nintendo64RuntimeTexture.hpp"
 
 namespace helengine::n64 {
 namespace {
@@ -51,7 +54,9 @@ constexpr const char kN64RendererFamilyId[] = "n64-standard";
     if (stream == nullptr) {
         throw new InvalidOperationException("N64 content source returned a null stream.");
     }
-    return ::AssetSerializer::Deserialize(stream);
+    const auto releaseStream = [](::Stream* value) { value->Dispose(); delete value; };
+    const std::unique_ptr<::Stream, decltype(releaseStream)> ownedStream(stream, releaseStream);
+    return ::AssetSerializer::Deserialize(ownedStream.get());
 }
 
 } // namespace
@@ -74,19 +79,38 @@ uint32_t Nintendo64RenderManager3D::PackColor(const ::PlatformMaterialAsset* mat
            static_cast<uint32_t>(material->BaseColorA);
 }
 
-::RuntimeMaterial* Nintendo64RenderManager3D::BuildMaterialAsset(::PlatformMaterialAsset* materialAsset) {
+::RuntimeMaterial* Nintendo64RenderManager3D::BuildMaterialAsset(::PlatformMaterialAsset* materialAsset, ::IContentStreamSource* source) {
     if (materialAsset == nullptr) {
         throw new ArgumentNullException("materialAsset");
     }
-    if (!materialAsset->TextureRelativePath.empty() || materialAsset->RendererFamilyId != kN64RendererFamilyId) {
-        throw new InvalidOperationException("N64 authored scenes require opaque n64-standard materials without textures.");
+    if (materialAsset->RendererFamilyId != kN64RendererFamilyId) {
+        throw new InvalidOperationException("N64 authored scenes require opaque n64-standard materials.");
     }
-    debugf("n64:material-loaded id=%s color=%08lX lit=%d\n", materialAsset->get_Id().c_str(), static_cast<unsigned long>(PackColor(materialAsset)), materialAsset->Lit ? 1 : 0);
-    return new Nintendo64RuntimeMaterial(PackColor(materialAsset), materialAsset->DoubleSided, materialAsset->Lit);
+    auto* material = new Nintendo64RuntimeMaterial(PackColor(materialAsset), materialAsset->DoubleSided, materialAsset->Lit);
+    try {
+        if (!materialAsset->TextureRelativePath.empty()) {
+            if (Render2D == nullptr || source == nullptr) {
+                throw new InvalidOperationException("N64 textured materials require a texture manager and cooked content source.");
+            }
+            ::RuntimeTexture* uploaded = Render2D->BuildTextureFromCooked(materialAsset->TextureRelativePath, source);
+            auto* texture = he_cpp_try_cast<Nintendo64RuntimeTexture>(uploaded);
+            if (texture == nullptr || texture->Surface() == nullptr || !rdpq_tex_can_upload(texture->Surface())) {
+                if (uploaded != nullptr) Render2D->ReleaseTexture(uploaded);
+                throw new InvalidOperationException("N64 mesh texture must be an initialized native texture fitting TMEM; cook 64x64 CI4 or a smaller direct texture.");
+            }
+            material->SetTexture(*Render2D, texture);
+        }
+    } catch (...) {
+        delete material;
+        throw;
+    }
+    debugf("n64:material-loaded id=%s color=%08lX lit=%d textured=%d\n", materialAsset->get_Id().c_str(), static_cast<unsigned long>(PackColor(materialAsset)), materialAsset->Lit ? 1 : 0, material->Texture() != nullptr ? 1 : 0);
+    return material;
 }
 
 ::RuntimeMaterial* Nintendo64RenderManager3D::BuildMaterialFromCooked(::PlatformMaterialAsset* materialAsset) {
-    return BuildMaterialAsset(materialAsset);
+    return BuildMaterialAsset(materialAsset, OwnerCore == nullptr || OwnerCore->get_InitializationOptions() == nullptr
+        ? nullptr : OwnerCore->get_InitializationOptions()->ContentStreamSource);
 }
 
 ::RuntimeMaterial* Nintendo64RenderManager3D::BuildMaterialFromCooked(
@@ -98,13 +122,13 @@ uint32_t Nintendo64RenderManager3D::PackColor(const ::PlatformMaterialAsset* mat
         throw new InvalidOperationException("N64 cooked material asset has the wrong type.");
     }
     // The runtime material copies every field it needs out of the cooked asset, so the asset is dead weight
-    // once the build returns.  BuildMaterialAsset throws on a textured or foreign-family material, so the
+    // once the build returns. BuildMaterialAsset can reject a foreign family or unusable texture, so the
     // release has to happen on that path too rather than only on the one that returns.  This mirrors
     // BuildTextureFromCooked in the 2D path; unlike TextureAsset, the generated PlatformMaterialAsset
     // declares no Dispose, so deleting it is the whole release and the two paths stay symmetric by shape.
     ::RuntimeMaterial* runtimeMaterial = nullptr;
     try {
-        runtimeMaterial = BuildMaterialAsset(material);
+        runtimeMaterial = BuildMaterialAsset(material, contentStreamSource);
     } catch (...) {
         delete material;
         throw;
@@ -242,6 +266,7 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
     uint32_t color = 0xFFFFFFFFu;
     bool doubleSided = false;
     bool lit = false;
+    Nintendo64RuntimeTexture* texture = nullptr;
     ::Array<::RuntimeMaterial*>* materials = drawable->get_Materials();
     if (materials != nullptr && materials->get_Length() > 0 && (*materials)[0] != nullptr) {
         Nintendo64RuntimeMaterial* material = he_cpp_try_cast<Nintendo64RuntimeMaterial>((*materials)[0]);
@@ -249,6 +274,7 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
             color = material->Color();
             doubleSided = material->DoubleSided();
             lit = material->Lit();
+            texture = material->Texture();
         }
     }
     if (lit && !model->HasNormals()) {
@@ -259,6 +285,13 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
     // Finish the previous submission before changing either input.
     rspq_wait();
     model->SetColor(color);
+    if (texture != nullptr) {
+        if (texture->Surface() == nullptr || !model->HasTextureCoordinates() ||
+            !model->SetTextureDimensions(static_cast<uint32_t>(texture->get_Width()), static_cast<uint32_t>(texture->get_Height()))) {
+            throw new InvalidOperationException("N64 textured meshes require complete finite UVs that fit Tiny3D's signed 10.5 texture coordinates.");
+        }
+        texture->Bind();
+    }
 
     ::Entity* entity = drawable->get_Parent();
     const ::float3 position = entity->get_Position();
@@ -269,7 +302,8 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
     const float authoredPosition[3] = {position.X, position.Y, position.Z};
     T3DMat4 modelMatrix;
     t3d_mat4_from_srt(&modelMatrix, authoredScale, authoredRotation, authoredPosition);
-    Renderer->DrawAuthoredMesh(model->Vertices(), model->VertexCount(), model->Indices(), model->IndexCount(), modelMatrix, doubleSided, lit, FrameLights);
+    Renderer->DrawAuthoredMesh(model->Vertices(), model->VertexCount(), model->Indices(), model->IndexCount(), modelMatrix, doubleSided, lit, FrameLights,
+        texture == nullptr ? nullptr : texture->Surface());
     DrawCallCount++;
     if (!HasLoggedAuthoredDraw) {
         ::ModelAsset* rawModel = model->get_RawModelAsset();

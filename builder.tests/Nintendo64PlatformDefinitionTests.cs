@@ -159,7 +159,7 @@ public sealed class Nintendo64PlatformDefinitionTests {
             Nintendo64MaterialSchemaIds.StandardSchemaId,
             new Dictionary<string, string> {
                 [Nintendo64MaterialSchemaIds.BaseColorFieldId] = "#12A0FF"
-            }));
+            }, numericPolicy: global::helengine.NumericPrecisionPolicy.Default));
 
         helengine.PlatformMaterialAsset cooked = Assert.IsType<helengine.PlatformMaterialAsset>(helengine.files.AssetSerializer.DeserializeFromBytes(result.CookedMaterialBytes));
         Assert.Equal("n64-standard", cooked.RendererFamilyId);
@@ -184,7 +184,7 @@ public sealed class Nintendo64PlatformDefinitionTests {
             Nintendo64MaterialSchemaIds.StandardSchemaId,
             new Dictionary<string, string> {
                 [Nintendo64MaterialSchemaIds.LightingModeFieldId] = "unlit"
-            }));
+            }, numericPolicy: global::helengine.NumericPrecisionPolicy.Default));
 
         helengine.PlatformMaterialAsset cooked = Assert.IsType<helengine.PlatformMaterialAsset>(helengine.files.AssetSerializer.DeserializeFromBytes(result.CookedMaterialBytes));
         Assert.False(cooked.Lit);
@@ -202,7 +202,7 @@ public sealed class Nintendo64PlatformDefinitionTests {
             Nintendo64MaterialSchemaIds.StandardSchemaId,
             new Dictionary<string, string> { [key] = value });
 
-        Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TextureRelativePathFieldId, "textures/cube.hetex")));
+        Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.BaseColorFieldId, "#FFFFFF80")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.LightingModeFieldId, "pbr")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.TransparencyFieldId, "alpha")));
     }

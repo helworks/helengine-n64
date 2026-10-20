@@ -33,11 +33,12 @@ class Asset {public:virtual ~Asset()=default;HeCppString Id;HeCppString get_Id()
 class ModelAsset:public Asset {public:Array<float3>* Positions=nullptr;Array<uint16_t>* Indices16=nullptr;void Dispose(){}};
 class PlatformMaterialAsset:public Asset {public:HeCppString TextureRelativePath,RendererFamilyId;uint8_t BaseColorR=255,BaseColorG=255,BaseColorB=255,BaseColorA=255;bool DoubleSided=false,Lit=false;};
 enum class RuntimeMaterialLightingModel { Unlit,MetalRoughPbr };
-class RuntimeMaterial {public:virtual ~RuntimeMaterial()=default;virtual void Dispose(){};RuntimeMaterialLightingModel LightingModel{};bool SupportsNormalMapping=false,SupportsEmissive=false,CastsShadows=false,ReceivesShadows=false;void set_Id(const char*){}};
+class RuntimeTexture {public:virtual ~RuntimeTexture()=default;virtual void Dispose(){};};
+class RuntimeMaterial {RuntimeTexture* primary=nullptr;public:virtual ~RuntimeMaterial()=default;virtual void Dispose(){primary=nullptr;};virtual void SetPrimaryTexture(RuntimeTexture* texture){primary=texture;}virtual RuntimeTexture* ResolvePrimaryTexture(){return primary;}RuntimeMaterialLightingModel LightingModel{};bool SupportsNormalMapping=false,SupportsEmissive=false,CastsShadows=false,ReceivesShadows=false;void set_Id(const char*){}};
 class RuntimeModel {public:virtual ~RuntimeModel()=default;virtual void Dispose(){};};
-class Stream {};
+class Stream {public:static inline int live=0,disposed=0;Stream(){live++;}virtual ~Stream(){live--;}virtual void Dispose(){disposed++;}};
 class IContentStreamSource {public:virtual ~IContentStreamSource()=default;virtual Stream* OpenRead(HeCppString){return nullptr;}};
-class AssetSerializer {public:static Asset* Deserialize(Stream*){return nullptr;}};
+class AssetSerializer {public:static inline Asset* NextAsset=nullptr;static inline bool ThrowOnRead=false;static Asset* Deserialize(Stream*){if(ThrowOnRead)throw new InvalidOperationException("invalid cooked asset");Asset* asset=NextAsset;NextAsset=nullptr;return asset;}};
 class ContentManager {};
 template<class Target,class Source> Target* he_cpp_try_cast(Source* source){return dynamic_cast<Target*>(source);}
 class Entity {public:float3 Position,Scale{1.5f,1.5f,1.5f};float3 get_Position(){return Position;}float3 get_Scale(){return Scale;}float4 get_Orientation(){return {};}};
@@ -48,7 +49,8 @@ class CameraClearSettings {public:bool get_ClearColorEnabled(){return false;}flo
 class ICamera {public:Entity parent;IRenderQueue3D queue;Entity* get_Parent(){return &parent;}IRenderQueue3D* get_RenderQueue3D(){return &queue;}float4 get_Viewport(){return {0,0,320,240};}float get_NearPlaneDistance(){return .1f;}float get_FarPlaneDistance(){return 100;}CameraClearSettings get_ClearSettings(){return {};}};
 class ObjectManager {public:List<ICamera*> cameras;List<IDrawable3D*> drawables;List<ICamera*>* get_Cameras(){return &cameras;}List<IDrawable3D*>* get_Drawables3D(){return &drawables;}};
 class SceneManager {public:bool get_IsSceneTransitionActive(){return false;}};
-class Core {public:ObjectManager objects;SceneManager scenes;ObjectManager* get_ObjectManager(){return &objects;}SceneManager* get_SceneManager(){return &scenes;}};
+struct CoreInitializationOptions {IContentStreamSource* ContentStreamSource=nullptr;};
+class Core {public:ObjectManager objects;SceneManager scenes;CoreInitializationOptions options;ObjectManager* get_ObjectManager(){return &objects;}SceneManager* get_SceneManager(){return &scenes;}CoreInitializationOptions* get_InitializationOptions(){return &options;}};
 class RenderManager3D {
 public:
  Core* OwnerCore=nullptr;

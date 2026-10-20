@@ -3,6 +3,7 @@
 #if HELENGINE_N64_HAS_GENERATED_CORE
 
 #include <libdragon.h>
+#include <memory>
 
 #include "AssetSerializer.hpp"
 #include "Core.hpp"
@@ -26,7 +27,7 @@ namespace {
 
 /// Reads one cooked asset through the content source and deserializes it.  This mirrors the helper in
 /// `Nintendo64RenderManager3D.cpp`: the two managers deliberately keep their own copy rather than share a
-/// header, because the only thing they have in common is these four lines.
+/// header. Both readers release the stream on success and on deserialization failure.
 ::Asset* Deserialize(::IContentStreamSource* source, const HeCppString& path) {
     if (source == nullptr) {
         throw new ArgumentNullException("contentStreamSource");
@@ -35,7 +36,9 @@ namespace {
     if (stream == nullptr) {
         throw new InvalidOperationException("N64 content source returned a null stream.");
     }
-    return ::AssetSerializer::Deserialize(stream);
+    const auto releaseStream = [](::Stream* value) { value->Dispose(); delete value; };
+    const std::unique_ptr<::Stream, decltype(releaseStream)> ownedStream(stream, releaseStream);
+    return ::AssetSerializer::Deserialize(ownedStream.get());
 }
 
 } // namespace

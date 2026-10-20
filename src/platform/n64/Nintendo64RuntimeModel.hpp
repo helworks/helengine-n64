@@ -25,6 +25,12 @@ public:
     uint32_t IndexCount() const { return IndexCountValue; }
     /// True when every cooked vertex received a packed normal.
     bool HasNormals() const { return HasNormalsValue; }
+    /// True when the cooked asset supplies one finite normalized UV per vertex.
+    bool HasTextureCoordinates() const { return HasTextureCoordinatesValue; }
+    /// Updates UVs for the current material's texture size from retained raw UVs.
+    /// The caller must fence pending RSP reads before this call. A false result
+    /// leaves all packed vertices unchanged; missing/invalid UVs cannot be textured.
+    bool SetTextureDimensions(uint32_t width, uint32_t height);
     void SetColor(uint32_t color);
 
 private:
@@ -34,6 +40,7 @@ private:
     uint32_t IndexCountValue = 0;
     /// True once the cooked asset supplied one normal per vertex and all of them were packed.
     bool HasNormalsValue = false;
+    bool HasTextureCoordinatesValue = false;
 };
 
 } // namespace helengine::n64
