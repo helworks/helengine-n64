@@ -9,7 +9,12 @@ using helengine.baseplatform.Results;
 namespace helengine.n64.builder;
 
 /// <summary>Platform discovery and build contract for the Nintendo 64 target.</summary>
-public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder {
+public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder, IPlatformLayoutTargetProvider {
+    /// <summary>Returns the framebuffer initialized by Nintendo64Video with libdragon's RESOLUTION_320x240.</summary>
+    public PlatformLayoutTarget ResolveLayoutTarget(PlatformLayoutTargetRequest request) {
+        ArgumentNullException.ThrowIfNull(request);
+        return new PlatformLayoutTarget(320, 240, 1d, false, 0d, 1d);
+    }
     readonly Nintendo64MaterialCooker MaterialCooker = new();
 
     /// <summary>Executes builder-owned platform cook work items declared by the manifest.</summary>
