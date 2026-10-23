@@ -230,19 +230,19 @@ int Nintendo64RuntimeHost::Run() {
                         const auto size = title->get_Size();
                         const auto position = entity->get_Position();
                         const auto shadow = title->get_ShadowOffset();
-                        const double width = ::TextLayoutAlignmentUtils::MeasureVisibleLineWidth(title->get_Text(), title->get_Font(), title->get_FontScale(), title->get_Font()->get_AtlasWidth());
-                        const double rightEffect = std::max(static_cast<double>(title->get_OutlineScale()), static_cast<double>(shadow.X));
-                        const double lineOffset = ::TextLayoutAlignmentUtils::ResolveHorizontalOffset(title->get_Alignment(), size.X, width);
+                        const auto width = ::TextLayoutAlignmentUtils::MeasureVisibleLineWidth(title->get_Text(), title->get_Font(), title->get_FontScale(), title->get_Font()->get_AtlasWidth());
+                        const auto rightEffect = std::max(static_cast<RealEvaluation>(title->get_OutlineScale()), static_cast<RealEvaluation>(shadow.X));
+                        const auto lineOffset = ::TextLayoutAlignmentUtils::ResolveHorizontalOffset(title->get_Alignment(), size.X, width);
                         const double snappedBaseX = Math::Round(position.X);
-                        const double paintedRight = snappedBaseX + lineOffset + width + rightEffect;
+                        const auto paintedRight = snappedBaseX + lineOffset + width + rightEffect;
                         auto* titleParent = entity->get_Parent();
                         const double parentRightAnchor = titleParent == nullptr ? static_cast<double>(position.X + size.X) : static_cast<double>(titleParent->get_Position().X);
                         debugf("n64:title-font text=%s scale=%.8f size=%ldx%ld position=%.8f/%.8f width=%.8f outline=%.8f right-effect=%.8f right-with-effect=%.8f box-right=%.8f\n",
                                title->get_Text().c_str(), static_cast<double>(title->get_FontScale()), static_cast<long>(size.X), static_cast<long>(size.Y),
-                               static_cast<double>(position.X), static_cast<double>(position.Y), width, static_cast<double>(title->get_OutlineScale()), rightEffect,
-                               paintedRight, static_cast<double>(position.X + size.X));
+                               static_cast<double>(position.X), static_cast<double>(position.Y), static_cast<double>(width), static_cast<double>(title->get_OutlineScale()), static_cast<double>(rightEffect),
+                               static_cast<double>(paintedRight), static_cast<double>(position.X + size.X));
                         debugf("n64:title-right text=%s alignment=%ld snapped-base=%.8f line-offset=%.8f painted-right=%.8f parent-anchor=%.8f margin=%.8f\n",
-                               title->get_Text().c_str(), static_cast<long>(title->get_Alignment()), snappedBaseX, lineOffset, paintedRight, parentRightAnchor, parentRightAnchor - paintedRight);
+                               title->get_Text().c_str(), static_cast<long>(title->get_Alignment()), snappedBaseX, static_cast<double>(lineOffset), static_cast<double>(paintedRight), parentRightAnchor, static_cast<double>(parentRightAnchor - paintedRight));
                         loggedTitleMetrics |= titleBit;
                     }
                 }
@@ -253,7 +253,7 @@ int Nintendo64RuntimeHost::Run() {
                         auto* characters = font->get_Characters();
                         if (characters != nullptr && characters->ContainsKey('R')) {
                             const auto glyph = characters->get_Item('R');
-                            const float glyphHeight = glyph.SourceRect.W * font->get_AtlasHeight();
+                            const auto glyphHeight = glyph.SourceRect.W * font->get_AtlasHeight();
                             float renderingAdvance = 0.0f;
                             for (const char character : text->get_Text()) {
                                 if (characters->ContainsKey(character)) renderingAdvance += characters->get_Item(character).AdvanceWidth;

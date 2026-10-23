@@ -24,29 +24,29 @@ constexpr int32_t kMaxIndices = 384; // 128 triangle-list triangles.
 void SetPackedVertex(T3DVertPacked& packed, uint32_t logicalIndex, const float3& position, const float3* normal) {
     uint16_t packedNormal = 0;
     if (normal != nullptr) {
-        const T3DVec3 normalVector = {{normal->X, normal->Y, normal->Z}};
+        const T3DVec3 normalVector = {{static_cast<float>(normal->X), static_cast<float>(normal->Y), static_cast<float>(normal->Z)}};
         packedNormal = t3d_vert_pack_normal(&normalVector);
     }
-    const float positionValues[3] = {position.X, position.Y, position.Z};
+    const float positionValues[3] = {static_cast<float>(position.X), static_cast<float>(position.Y), static_cast<float>(position.Z)};
     Nintendo64VertexPacking::WriteVertex(packed, logicalIndex, positionValues, kPositionScale, packedNormal, 0xFFFFFFFFu);
 }
 
 /// True when the position is finite and fits the fixed-point vertex range once scaled.
 bool IsFinitePosition(const float3& position) {
-    return std::isfinite(position.X) && std::isfinite(position.Y) && std::isfinite(position.Z) &&
-        std::fabs(position.X * kPositionScale) <= 32767.0f &&
-        std::fabs(position.Y * kPositionScale) <= 32767.0f &&
-        std::fabs(position.Z * kPositionScale) <= 32767.0f;
+    return RealEvaluation::IsFinite(position.X) && RealEvaluation::IsFinite(position.Y) && RealEvaluation::IsFinite(position.Z) &&
+        RealMath::Abs(position.X * kPositionScale) <= 32767.0f &&
+        RealMath::Abs(position.Y * kPositionScale) <= 32767.0f &&
+        RealMath::Abs(position.Z * kPositionScale) <= 32767.0f;
 }
 
 /// True when every component of a cooked normal is finite and the normal has a non-zero length.
 /// Packing has no fixed-point range to respect, but Tiny3D's `t3d_vert_pack_normal` normalizes
 /// through `t3d_vec3_norm`, which divides by the length, so a zero-length normal must be rejected.
 bool IsUsableNormal(const float3& normal) {
-    if (!std::isfinite(normal.X) || !std::isfinite(normal.Y) || !std::isfinite(normal.Z)) {
+    if (!RealEvaluation::IsFinite(normal.X) || !RealEvaluation::IsFinite(normal.Y) || !RealEvaluation::IsFinite(normal.Z)) {
         return false;
     }
-    const float squaredLength = normal.X * normal.X + normal.Y * normal.Y + normal.Z * normal.Z;
+    const auto squaredLength = normal.X * normal.X + normal.Y * normal.Y + normal.Z * normal.Z;
     return squaredLength > 0.0f;
 }
 
@@ -96,7 +96,7 @@ bool Nintendo64RuntimeModel::Initialize(const ::ModelAsset* asset) {
     if (hasTextureCoordinates) {
         for (int32_t vertex = 0; vertex < vertexCount; vertex++) {
             const float2& uv = (*asset->TexCoords)[vertex];
-            if (!std::isfinite(uv.X) || !std::isfinite(uv.Y)) {
+            if (!RealEvaluation::IsFinite(uv.X) || !RealEvaluation::IsFinite(uv.Y)) {
                 return false;
             }
         }
@@ -182,14 +182,14 @@ bool Nintendo64RuntimeModel::SetTextureDimensions(uint32_t width, uint32_t heigh
     T3DVertPacked validated = {};
     for (uint32_t vertex = 0; vertex < VertexCountValue; vertex++) {
         const float2& source = (*asset->TexCoords)[vertex];
-        const float uv[2] = {source.X, source.Y};
+        const float uv[2] = {static_cast<float>(source.X), static_cast<float>(source.Y)};
         if (!Nintendo64VertexPacking::WriteTextureCoordinates(validated, vertex, uv, width, height)) {
             return false;
         }
     }
     for (uint32_t vertex = 0; vertex < VertexCountValue; vertex++) {
         const float2& source = (*asset->TexCoords)[vertex];
-        const float uv[2] = {source.X, source.Y};
+        const float uv[2] = {static_cast<float>(source.X), static_cast<float>(source.Y)};
         // No callbacks or source mutations occur between validation and writing.
         Nintendo64VertexPacking::WriteTextureCoordinates(VerticesValue[vertex / 2], vertex, uv, width, height);
     }

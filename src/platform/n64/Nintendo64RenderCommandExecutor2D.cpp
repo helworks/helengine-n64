@@ -77,7 +77,7 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
                 throw new InvalidOperationException("N64 clip stack cannot nest past its fixed depth.");
             }
             const ::float4 clipRect = commandList->GetClipPushRect(commandList->GetClipPushPayloadIndex(commandIndex));
-            clipStack.Push(clipRect.X, clipRect.Y, clipRect.Z, clipRect.W);
+            clipStack.Push(static_cast<float>(clipRect.X), static_cast<float>(clipRect.Y), static_cast<float>(clipRect.Z), static_cast<float>(clipRect.W));
             const Nintendo64ClipRect current = clipStack.Current();
             rdpq_set_scissor(current.X, current.Y, current.X + current.Width, current.Y + current.Height);
             continue;
@@ -163,8 +163,8 @@ void Nintendo64RenderCommandExecutor2D::Execute(::RenderCommandList2D* commandLi
 
 void Nintendo64RenderCommandExecutor2D::BlitSpriteQuad(::RuntimeTexture* texture, ::SpriteQuad2D quad,
     ::float4 sourceRect, ::byte4 color, Nintendo64TextureBindingCache& bindings) {
-    const float x[4] = {quad.TopLeft.X, quad.TopRight.X, quad.BottomRight.X, quad.BottomLeft.X};
-    const float y[4] = {quad.TopLeft.Y, quad.TopRight.Y, quad.BottomRight.Y, quad.BottomLeft.Y};
+    const float x[4] = {static_cast<float>(quad.TopLeft.X), static_cast<float>(quad.TopRight.X), static_cast<float>(quad.BottomRight.X), static_cast<float>(quad.BottomLeft.X)};
+    const float y[4] = {static_cast<float>(quad.TopLeft.Y), static_cast<float>(quad.TopRight.Y), static_cast<float>(quad.BottomRight.Y), static_cast<float>(quad.BottomLeft.Y)};
     if (Nintendo64QuadBlitGeometry::IsAxisAligned(x, y)) {
         BlitQuad(texture, ::float4(x[0], y[0], x[1] - x[0], y[3] - y[0]), sourceRect, color, false, bindings);
         return;
@@ -172,7 +172,7 @@ void Nintendo64RenderCommandExecutor2D::BlitSpriteQuad(::RuntimeTexture* texture
     auto* concreteTexture = he_cpp_try_cast<Nintendo64RuntimeTexture>(texture);
     if (concreteTexture == nullptr || concreteTexture->Surface() == nullptr) return;
     const auto source = Nintendo64QuadBlitGeometry::Resolve(concreteTexture->get_Width(), concreteTexture->get_Height(),
-        sourceRect.X, sourceRect.Y, sourceRect.Z, sourceRect.W, 0, 0, 1, 1);
+        static_cast<float>(sourceRect.X), static_cast<float>(sourceRect.Y), static_cast<float>(sourceRect.Z), static_cast<float>(sourceRect.W), 0, 0, 1, 1);
     if (source.Kind != Nintendo64QuadBlitKind::Drawable) return;
     fm_mat3_t matrix{};
     if (!Nintendo64QuadBlitGeometry::TryResolveAffineTransform(x, y, source.SourceWidth, source.SourceHeight, matrix.m)) return;
@@ -218,8 +218,8 @@ void Nintendo64RenderCommandExecutor2D::BlitQuad(::RuntimeTexture* texture, ::fl
     // command's fields into scalars and turns the result into RDP calls.
     const Nintendo64QuadBlitGeometry2D geometry = Nintendo64QuadBlitGeometry::Resolve(
         concreteTexture->get_Width(), concreteTexture->get_Height(),
-        sourceRect.X, sourceRect.Y, sourceRect.Z, sourceRect.W,
-        bounds.X, bounds.Y, bounds.Z, bounds.W);
+        static_cast<float>(sourceRect.X), static_cast<float>(sourceRect.Y), static_cast<float>(sourceRect.Z), static_cast<float>(sourceRect.W),
+        static_cast<float>(bounds.X), static_cast<float>(bounds.Y), static_cast<float>(bounds.Z), static_cast<float>(bounds.W));
     if (geometry.Kind == Nintendo64QuadBlitKind::EmptySource) {
         return;
     }
@@ -277,15 +277,15 @@ void Nintendo64RenderCommandExecutor2D::BlitQuad(::RuntimeTexture* texture, ::fl
 
 void Nintendo64RenderCommandExecutor2D::FillRoundedRect(::RenderCommandList2D* commandList, int32_t payloadIndex) {
     const ::float4 bounds = commandList->GetRoundedRectBounds(payloadIndex);
-    const float radius = commandList->GetRoundedRectRadius(payloadIndex);
+    const float radius = static_cast<float>(commandList->GetRoundedRectRadius(payloadIndex));
     const ::byte4 fillColor = commandList->GetRoundedRectFillColor(payloadIndex);
 
     // The command list exposes only the resolved bounds, radius and fill colour for this command - no parent
     // scale - so this always resolves against a unit scale rather than the entity scale the old drawable-
     // dispatch path used to read directly off the parent.
     const Nintendo64RoundedRectFillGeometry geometry = Nintendo64RoundedRectGeometry::Resolve(
-        Nintendo64RoundedRectGeometry::RoundToInt(bounds.Z),
-        Nintendo64RoundedRectGeometry::RoundToInt(bounds.W),
+        Nintendo64RoundedRectGeometry::RoundToInt(static_cast<float>(bounds.Z)),
+        Nintendo64RoundedRectGeometry::RoundToInt(static_cast<float>(bounds.W)),
         radius,
         1.0f,
         1.0f);
@@ -302,8 +302,8 @@ void Nintendo64RenderCommandExecutor2D::FillRoundedRect(::RenderCommandList2D* c
     // The command's position is the top-left corner, but the ring builder works from the centre.  Round the
     // corner onto a whole pixel exactly as the quad blit does, so a rectangle and an icon authored on the
     // same reference-canvas grid still line up once the viewport downscale leaves them on half pixels.
-    const float left = static_cast<float>(Nintendo64RoundedRectGeometry::RoundToInt(bounds.X));
-    const float top = static_cast<float>(Nintendo64RoundedRectGeometry::RoundToInt(bounds.Y));
+    const float left = static_cast<float>(Nintendo64RoundedRectGeometry::RoundToInt(static_cast<float>(bounds.X)));
+    const float top = static_cast<float>(Nintendo64RoundedRectGeometry::RoundToInt(static_cast<float>(bounds.Y)));
     if (geometry.Kind == Nintendo64RoundedRectGeometryKind::AxisAlignedRectangle) {
         rdpq_mode_combiner(RDPQ_COMBINER_FLAT);
         rdpq_set_prim_color(RGBA32(fillColor.X, fillColor.Y, fillColor.Z, fillColor.W));
@@ -351,9 +351,9 @@ void Nintendo64RenderCommandExecutor2D::FillRoundedRect(::RenderCommandList2D* c
         const ::float2& center = (*vertices)[index];
         const ::float2& first = (*vertices)[index + 1];
         const ::float2& second = (*vertices)[index + 2];
-        const float centerVertex[2] = {center.X, center.Y};
-        const float firstVertex[2] = {first.X, first.Y};
-        const float secondVertex[2] = {second.X, second.Y};
+        const float centerVertex[2] = {static_cast<float>(center.X), static_cast<float>(center.Y)};
+        const float firstVertex[2] = {static_cast<float>(first.X), static_cast<float>(first.Y)};
+        const float secondVertex[2] = {static_cast<float>(second.X), static_cast<float>(second.Y)};
         rdpq_triangle(&TRIFMT_FILL, centerVertex, firstVertex, secondVertex);
     }
     delete vertices;

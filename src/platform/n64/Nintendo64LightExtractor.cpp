@@ -29,7 +29,7 @@ void Nintendo64LightExtractor::Extract(::ObjectManager* objectManager, Nintendo6
                 continue;
             }
             const ::float4 color = ambient->get_Color();
-            Nintendo64LightMath::Accumulate(color.X, color.Y, color.Z, ambient->get_Intensity(), ambientAccumulator);
+            Nintendo64LightMath::Accumulate(static_cast<float>(color.X), static_cast<float>(color.Y), static_cast<float>(color.Z), static_cast<float>(ambient->get_Intensity()), ambientAccumulator);
         }
     }
     if (!Nintendo64LightMath::PackAccumulated(ambientAccumulator, lights.Ambient)) {
@@ -51,11 +51,11 @@ void Nintendo64LightExtractor::Extract(::ObjectManager* objectManager, Nintendo6
         }
         Nintendo64DirectionalLight& entry = lights.Directional[lights.DirectionalCount];
         const ::float4 color = directional->get_Color();
-        if (!Nintendo64LightMath::PackColor(color.X, color.Y, color.Z, directional->get_Intensity(), entry.Color)) {
+        if (!Nintendo64LightMath::PackColor(static_cast<float>(color.X), static_cast<float>(color.Y), static_cast<float>(color.Z), static_cast<float>(directional->get_Intensity()), entry.Color)) {
             throw new InvalidOperationException("N64 directional light color is not finite.");
         }
         const ::float3 forward = ::LightDirectionUtility::GetLightDirection(directional);
-        if (!Nintendo64LightMath::ToLightVector(forward.X, forward.Y, forward.Z, entry.Direction)) {
+        if (!Nintendo64LightMath::ToLightVector(static_cast<float>(forward.X), static_cast<float>(forward.Y), static_cast<float>(forward.Z), entry.Direction)) {
             throw new InvalidOperationException("N64 directional light has a zero-length direction.");
         }
         lights.DirectionalCount++;

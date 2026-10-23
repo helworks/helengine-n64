@@ -180,20 +180,20 @@ bool Nintendo64RenderManager3D::ConfigureCamera(::ICamera* camera) {
     const ::float3 forward = ::float4::RotateVector(::float3(0.0f, 0.0f, -1.0f), orientation);
     const ::float3 up = ::float4::RotateVector(::float3(0.0f, 1.0f, 0.0f), orientation);
     const ::float3 target = position + forward;
-    T3DVec3 eye = {{position.X, position.Y, position.Z}};
-    T3DVec3 lookTarget = {{target.X, target.Y, target.Z}};
-    T3DVec3 lookUp = {{up.X, up.Y, up.Z}};
+    T3DVec3 eye = {{static_cast<float>(position.X), static_cast<float>(position.Y), static_cast<float>(position.Z)}};
+    T3DVec3 lookTarget = {{static_cast<float>(target.X), static_cast<float>(target.Y), static_cast<float>(target.Z)}};
+    T3DVec3 lookUp = {{static_cast<float>(up.X), static_cast<float>(up.Y), static_cast<float>(up.Z)}};
     T3DMat4 viewMatrix;
     t3d_mat4_look_at(&viewMatrix, &eye, &lookTarget, &lookUp);
 
     const ::float4 viewport = camera->get_Viewport();
     const bool normalizedViewport = viewport.Z > 0.0f && viewport.Z <= 1.0f && viewport.W > 0.0f && viewport.W <= 1.0f;
-    const float width = normalizedViewport ? 320.0f : (viewport.Z > 0.0f ? viewport.Z : 320.0f);
-    const float height = normalizedViewport ? 240.0f : (viewport.W > 0.0f ? viewport.W : 240.0f);
-    const float aspect = width / height;
-    const float nearPlane = camera->get_NearPlaneDistance() > 0.0f ? camera->get_NearPlaneDistance() : 0.1f;
-    const float farPlane = camera->get_FarPlaneDistance() > nearPlane ? camera->get_FarPlaneDistance() : 1000.0f;
-    Renderer->SetAuthoredCamera(viewMatrix, T3D_DEG_TO_RAD(60.0f), aspect, nearPlane, farPlane);
+    const auto width = normalizedViewport ? 320.0f : (viewport.Z > 0.0f ? viewport.Z : 320.0f);
+    const auto height = normalizedViewport ? 240.0f : (viewport.W > 0.0f ? viewport.W : 240.0f);
+    const auto aspect = width / height;
+    const auto nearPlane = camera->get_NearPlaneDistance() > 0.0f ? camera->get_NearPlaneDistance() : 0.1f;
+    const auto farPlane = camera->get_FarPlaneDistance() > nearPlane ? camera->get_FarPlaneDistance() : 1000.0f;
+    Renderer->SetAuthoredCamera(viewMatrix, T3D_DEG_TO_RAD(60.0f), static_cast<float>(aspect), static_cast<float>(nearPlane), static_cast<float>(farPlane));
     return true;
 }
 
@@ -214,8 +214,8 @@ void Nintendo64RenderManager3D::Draw() {
     RenderOrderedCameraPasses(*cameras,
         [this](::ICamera* camera) {
             if (Video == nullptr) return;
-            ApplyCameraAttachmentClears(*Video, camera->get_ClearSettings(), [](float value) {
-                return static_cast<uint8_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f));
+            ApplyCameraAttachmentClears(*Video, camera->get_ClearSettings(), [](RealEvaluation value) {
+                return static_cast<uint8_t>(static_cast<int32_t>(RealMath::Round(RealMath::Clamp(value, 0.0f, 1.0f) * 255.0f)));
             });
         },
         [this](::ICamera* camera) {
@@ -297,9 +297,9 @@ void Nintendo64RenderManager3D::Visit(::IDrawable3D* drawable) {
     const ::float3 position = entity->get_Position();
     const ::float3 scale = entity->get_Scale();
     const ::float4 orientation = entity->get_Orientation();
-    const float authoredScale[3] = {scale.X / 64.0f, scale.Y / 64.0f, scale.Z / 64.0f};
-    const float authoredRotation[4] = {orientation.X, orientation.Y, orientation.Z, orientation.W};
-    const float authoredPosition[3] = {position.X, position.Y, position.Z};
+    const float authoredScale[3] = {static_cast<float>(scale.X / 64.0f), static_cast<float>(scale.Y / 64.0f), static_cast<float>(scale.Z / 64.0f)};
+    const float authoredRotation[4] = {static_cast<float>(orientation.X), static_cast<float>(orientation.Y), static_cast<float>(orientation.Z), static_cast<float>(orientation.W)};
+    const float authoredPosition[3] = {static_cast<float>(position.X), static_cast<float>(position.Y), static_cast<float>(position.Z)};
     T3DMat4 modelMatrix;
     t3d_mat4_from_srt(&modelMatrix, authoredScale, authoredRotation, authoredPosition);
     Renderer->DrawAuthoredMesh(model->Vertices(), model->VertexCount(), model->Indices(), model->IndexCount(), modelMatrix, doubleSided, lit, FrameLights,
