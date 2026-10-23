@@ -40,7 +40,7 @@ public sealed class Nintendo64MaterialCooker {
             BaseColorB = b,
             BaseColorA = a
         };
-        return new PlatformMaterialCookResult(helengine.files.AssetSerializer.SerializeToBytes(cooked), []);
+        return new PlatformMaterialCookResult(helengine.files.AssetSerializer.SerializeToBytes(cooked, request.NumericPolicy), []);
     }
 
     static string Resolve(IReadOnlyDictionary<string, string> values, string key, string fallback = "") {

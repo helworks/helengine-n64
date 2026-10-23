@@ -73,7 +73,7 @@ public sealed class Nintendo64PlatformAssetBuilder : IPlatformAssetBuilder, IPla
             List<string> builderCookedRelativePaths = new(cookWorkItems.Length);
             for (int workItemIndex = 0; workItemIndex < cookWorkItems.Length; workItemIndex++) {
                 cancellationToken.ThrowIfCancellationRequested();
-                CookWorkItemExecutor.Execute(cookWorkItems[workItemIndex], packageSourceRoot);
+                CookWorkItemExecutor.Execute(cookWorkItems[workItemIndex], packageSourceRoot, request.NumericPolicy);
                 builderCookedRelativePaths.Add(cookWorkItems[workItemIndex].OutputRelativePath);
                 progressReporter.Report(new PlatformBuildProgressUpdate(
                     "Cook Platform Artifacts",

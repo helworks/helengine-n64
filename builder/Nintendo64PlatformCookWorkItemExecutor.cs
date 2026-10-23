@@ -33,7 +33,12 @@ public sealed class Nintendo64PlatformCookWorkItemExecutor {
     /// </summary>
     /// <param name="workItem">Work item describing the source asset, settings, and cooked output path.</param>
     /// <param name="packageSourceRootPath">Package source root that the DragonFS stager reads.</param>
-    public void Execute(PlatformCookWorkItem workItem, string packageSourceRootPath) {
+    public void Execute(PlatformCookWorkItem workItem, string packageSourceRootPath) =>
+        Execute(workItem, packageSourceRootPath, RealRepresentation.Policy);
+
+    /// <summary>Serializes cooked runtime textures with the immutable numeric policy selected for their target build.</summary>
+    public void Execute(PlatformCookWorkItem workItem, string packageSourceRootPath, NumericPrecisionPolicy numericPolicy) {
+        ArgumentNullException.ThrowIfNull(numericPolicy);
         if (workItem == null) {
             throw new ArgumentNullException(nameof(workItem));
         }
@@ -55,6 +60,6 @@ public sealed class Nintendo64PlatformCookWorkItemExecutor {
         string destinationDirectory = Path.GetDirectoryName(destinationPath)
             ?? throw new InvalidOperationException($"N64 cooked texture destination directory could not be resolved for '{destinationPath}'.");
         Directory.CreateDirectory(destinationDirectory);
-        File.WriteAllBytes(destinationPath, helengine.files.AssetSerializer.SerializeToBytes(cookedTexture));
+        File.WriteAllBytes(destinationPath, helengine.files.AssetSerializer.SerializeToBytes(cookedTexture, numericPolicy));
     }
 }

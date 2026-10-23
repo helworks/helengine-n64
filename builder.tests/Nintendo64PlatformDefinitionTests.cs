@@ -200,7 +200,7 @@ public sealed class Nintendo64PlatformDefinitionTests {
             "debug",
             "n64-standard",
             Nintendo64MaterialSchemaIds.StandardSchemaId,
-            new Dictionary<string, string> { [key] = value });
+            new Dictionary<string, string> { [key] = value }, numericPolicy: NumericPrecisionPolicy.Default);
 
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.BaseColorFieldId, "#FFFFFF80")));
         Assert.Throws<InvalidOperationException>(() => builder.CookMaterial(request(Nintendo64MaterialSchemaIds.LightingModeFieldId, "pbr")));

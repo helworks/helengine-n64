@@ -8,6 +8,30 @@ namespace helengine.n64.builder.tests;
 /// Exercises indexed cooking and real work-item serialization without changing glyph metrics or caller pixels.
 /// </summary>
 public sealed class Nintendo64IndexedTextureCookTests {
+    /// <summary>Loads cooked texture bytes with the actual target runtime reader and selected numeric width.</summary>
+    [Theory]
+    [InlineData(16)]
+    [InlineData(32)]
+    [InlineData(64)]
+    public void CookedTextureLoadsWithTargetNumericPolicy(int bits) {
+        string root = Environment.GetEnvironmentVariable("HELENGINE_N64_INDEXED_TEST_ROOT")
+            ?? throw new InvalidOperationException("The fixed N64 indexed test root must be configured.");
+        string caseRoot = Path.Combine(root, "numeric-policy");
+        Directory.CreateDirectory(caseRoot);
+        string sourcePath = Path.Combine(caseRoot, "source.hetex");
+        using TextureAsset source = CreateTexture(2, 1);
+        File.WriteAllBytes(sourcePath, helengine.files.AssetSerializer.SerializeToBytes(source));
+        string settings = Nintendo64PlatformDefinitionFactory.Create().AssetCookCapabilities
+            .Single(capability => capability.SourceAssetKind == "font-atlas-texture").DefaultSerializedPlatformSettings;
+        var item = new PlatformCookWorkItem("atlas", sourcePath, "font-atlas-texture", "n64", "runtime-texture",
+            "atlas.hetex", "menu-atlas", "source-hash", "settings-hash", settings, []);
+        var policy = new NumericPrecisionPolicy(bits, bits);
+        new Nintendo64PlatformCookWorkItemExecutor().Execute(item, caseRoot, policy);
+        using var stream = File.OpenRead(Path.Combine(caseRoot, "atlas.hetex"));
+        using TextureAsset cooked = Assert.IsType<TextureAsset>(PackagedAssetBinarySerializer.Deserialize(stream, policy));
+        Assert.Equal(2, cooked.Width);
+        Assert.Equal(source.Colors, TextureAssetPixelCodec.DecodeToRgba32(cooked));
+    }
     /// <summary>Checks the image default remains RGBA while fallback font atlases use full-coverage Indexed8.</summary>
     [Fact]
     public void CapabilitiesPublishIndexedFormatsAndFontDefault() {

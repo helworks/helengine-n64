@@ -4,6 +4,19 @@ using helengine.n64.builder;
 namespace helengine.n64.builder.tests;
 
 public sealed class Nintendo64MaterialCookerTests {
+    /// <summary>Checks the material envelope can be consumed by the selected target runtime rather than the tooling host.</summary>
+    [Theory]
+    [InlineData(16)]
+    [InlineData(32)]
+    [InlineData(64)]
+    public void CookedMaterialLoadsWithTargetNumericPolicy(int bits) {
+        var policy = new helengine.NumericPrecisionPolicy(bits, bits);
+        var request = new PlatformMaterialCookRequest("material", "materials/sample.hasset", "n64", "debug", "n64-standard",
+            Nintendo64MaterialSchemaIds.StandardSchemaId, new Dictionary<string, string>(), numericPolicy: policy);
+        var result = new Nintendo64MaterialCooker().Cook(request);
+        using var stream = new MemoryStream(result.CookedMaterialBytes);
+        Assert.IsType<helengine.PlatformMaterialAsset>(helengine.PackagedAssetBinarySerializer.Deserialize(stream, policy));
+    }
     [Theory]
     [InlineData("lit", true)]
     [InlineData("unlit", false)]
